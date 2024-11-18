@@ -35,12 +35,4 @@ class readtim:
         
         self.stagenum = count
         if count > 2:
-           print ("ERROR: more than two stages")             
-                    
-                        
-                    
-                
-        
-
-
-
+           print ("ERROR: more than two stages")

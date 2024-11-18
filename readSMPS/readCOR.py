@@ -25,8 +25,10 @@ class readcor:
     def get_mean(self):
         self.mean_vars   = self.mean_model.getVars()
         self.mean_const  = self.mean_model.getConstrs()
+        #print("self.mean_const", self.mean_const)
+        self.mean_model.setParam("OutputFlag", 0)
         self.mean_model.optimize()
-        print ('Mean value optimal: ', self.mean_model.objVal)
+        #print ('Mean value optimal: ', self.mean_model.objVal)
         self.mean_model.printAttr('x')
         self.mean_sol = [o.getAttr('x') for o in self.mean_vars]
         self.mean_status = self.mean_model.Status

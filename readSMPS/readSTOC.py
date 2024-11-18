@@ -36,30 +36,14 @@ class readstoc:
                     if words[1] not in self.rv:
                         cumul = 0
                         self.rv.append(words[1])
-                        tmp = list()
-                        tmp.append({float(words[2]):float(words[3])})
-                        self.dist.append(tmp)
-                        tmp = list()
-                        tmp.append({float(words[2]):float(words[3])})
-                        self.cumul_dist.append(tmp)
+                        self.dist.append({float(words[2]): float(words[3])})
+                        self.cumul_dist.append({float(words[2]): float(words[3])})
                         count += 1
                     else:
                         cumul += float(words[3])
-                        tmp = list()
-                        tmp.append({float(words[2]):float(words[3])})
                         rvidx = self.rv.index(words[1])
-                        self.dist[rvidx].append(tmp)
-                        tmp = list()
-                        tmp.append({float(words[2]):cumul})
-                        self.cumul_dist[rvidx].append(tmp)
+                        self.dist[rvidx].update({float(words[2]): float(words[3])})
+                        self.cumul_dist[rvidx].update({float(words[2]): cumul})
         
         #count contains the number of rvs
         self.rvnum = count
-                    
-                        
-                    
-                
-        
-
-
-

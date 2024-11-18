@@ -68,9 +68,9 @@ class TIME:
         self.stage_size  = tim.stagenum
         
 class decompose:
-    def __init__(self,name,dirr): # dirr = ".\\Input\\"
+    def __init__(self,name,dirr): # dirr = "./Input/"
         self.model_name = name
-        self.name = dirr + name + "\\" + name
+        self.name = dirr + name + "/" + name
         self.prob = prob(self.name)     #Prob information
         self.RV   = RandVars(self.name) #Random variabels
         self.tim  = TIME(self.name)     #Time information(stages)
@@ -129,21 +129,46 @@ class decompose:
             self.prob.master_model.update()
         self.prob.master_const = self.prob.master_model.getConstrs()
     
-    #Create LSsub constraints
-    def create_LSsub_constr(self,obs,incmbt):
+    #create LSsub constraints
+    def create_LSsub_constr(self, obs, incmbt):
+        # Get the relevant constraints and replace observations
         constr = self.prob.mean_const[self.tim.stage_idx_row[1]:]
         constr = self.replaceObs(obs,constr)
+
+        # Copy the mean model
+        copied_mean_model = self.prob.mean_model.copy()
+        copied_mean_model.update()
+
+        # Copy the sub model
+        copied_sub_model = self.prob.sub_model.copy()
+        copied_sub_model.update()
+
+        copied_sub_model_vars  = copied_sub_model.getVars()
+
         for c in constr:
             empt = gb.LinExpr()
             Cx = 0
-            for v in self.prob.sub_vars:
-                empt += self.prob.mean_model.getCoeff(c,v) * v
+            for v in copied_sub_model_vars:
+                # Ensure that c and v are correctly referenced in copied_mean_model
+                constr_in_copy = copied_mean_model.getConstrByName(c.getAttr('ConstrName'))
+                var_in_copy = copied_mean_model.getVarByName(v.getAttr('VarName'))
+
+                # Access the coefficient in the copied model
+                coeff = copied_mean_model.getCoeff(constr_in_copy, var_in_copy)
+                # print(f"Coefficient of {var_in_copy.VarName} in constraint {constr_in_copy.ConstrName}: {coeff}")
+
+                empt += coeff * copied_sub_model.getVarByName(var_in_copy.VarName)
+
             for v in range(len(self.prob.master_vars)):
                 if 'eta' not in self.prob.master_vars[v].getAttr('VarName'):
-                    Cx   += self.prob.mean_model.getCoeff(c,self.prob.master_vars[v]) * incmbt[v]
-            self.prob.sub_model.addConstr(empt,c.getAttr('Sense'),c.getAttr('RHS') - Cx,c.getAttr('ConstrName'))
-            self.prob.sub_model.update()
-        self.prob.sub_const = self.prob.sub_model.getConstrs()
+                    master_var_in_copy = copied_mean_model.getVarByName(self.prob.master_vars[v].getAttr('VarName'))
+                    Cx += copied_mean_model.getCoeff(constr_in_copy, master_var_in_copy) * incmbt[v]
+
+            copied_sub_model.addConstr(empt, c.getAttr('Sense'), c.getAttr('RHS') - Cx, c.getAttr('ConstrName'))
+            copied_sub_model.update()
+
+        self.prob.sub_model = copied_sub_model.copy()
+        self.prob.sub_model.update()
     
     #Creating linear master with one surrogates (\eta)
     def create_master(self):
@@ -199,21 +224,16 @@ class decompose:
 
     #creating the Lshaped subproblem
     def create_LSsub(self,obs,incmb):
-        self.prob.sub_vars  = self.prob.sub_vars[self.tim.stage_idx_col[1]:]
-        self.prob.sub_const = self.prob.sub_const[self.tim.stage_idx_col[1]:]
+        self.prob.sub_model.remove(self.prob.sub_model.getVars())
+        self.prob.sub_model.remove(self.prob.sub_model.getConstrs())
+
+        #Create new variables
+        self.prob.sub_vars  = self.prob.mean_vars[self.tim.stage_idx_col[1]:]
 
         for v in self.prob.sub_vars:
             self.prob.sub_model.addVar(lb=v.getAttr("LB"), ub=v.getAttr("UB"), obj=v.getAttr("Obj"), vtype=v.getAttr("VType"), name=v.getAttr("VarName"))
+        
         self.prob.sub_model.update()
         self.prob.sub_vars = self.prob.sub_model.getVars()
+
         self.create_LSsub_constr(obs,incmb)
-    
-        
-        
-        
-        
-        
-        
-        
-        
-        
