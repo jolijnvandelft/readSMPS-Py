@@ -1,6 +1,6 @@
-from decmps_2slp import RandVars
+from readSMPS.decmps_2slp import RandVars
 from itertools import product
-from create_master import create_model
+from readSMPS.create_master import create_model
 
 import gurobipy as gb
 import numpy as np
