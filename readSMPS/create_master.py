@@ -1,19 +1,23 @@
 from decmps_2slp import decompose
 import os
 
-instance = "20"
+instance = "lands3"
+input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
 output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
-d = decompose(f"{instance}", "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/")
+def create_model(instance, input_dir):
+    d = decompose(f"{instance}", input_dir)
 
-os.makedirs(output_dir, exist_ok=True)
+    #Create master problem
+    d.find_stage_idx()
+    d.create_master()
 
-#Create master problem
-d.find_stage_idx()
-d.create_master()
-d.prob.master_model.write(f"Master_{instance}_0.lp")
+    return d
+
+d = create_model(instance, input_dir)
 
 # Save the file in the newly created folder
-output_file = os.path.join(output_dir, f"Master_{instance}_0.lp")
+os.makedirs(output_dir, exist_ok=True)
+
+output_file = os.path.join(output_dir, "Master_0.lp")
 d.prob.master_model.write(output_file)
-print(f"File saved to: {output_file}")
