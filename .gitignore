@@ -1,3 +1,6 @@
 .DS_Store
 __pycache__/
 readSMPS/Output/
+readSMPS/Input/lands/landsef.lp
+mps_to_lp.py
+optimize_lp.py

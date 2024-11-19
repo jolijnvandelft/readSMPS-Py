@@ -1,11 +1,11 @@
 from decmps_2slp import decompose
 import os
 
-instance = "lands3"
+instance = "lands"
 input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
 output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
-def create_model(instance, input_dir):
+def create_master(instance, input_dir):
     d = decompose(f"{instance}", input_dir)
 
     #Create master problem
@@ -14,7 +14,7 @@ def create_model(instance, input_dir):
 
     return d
 
-d = create_model(instance, input_dir)
+d = create_master(instance, input_dir)
 
 # Save the file in the newly created folder
 os.makedirs(output_dir, exist_ok=True)

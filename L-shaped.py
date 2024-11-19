@@ -1,11 +1,19 @@
-from readSMPS.decmps_2slp import RandVars
-from itertools import product
-from readSMPS.create_master import create_model
-
 import gurobipy as gb
 import numpy as np
 import os
 import time
+import sys
+
+# Get the directory containing readSMPS
+readsmps_dir = "/Users/jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS"
+
+# Add it to sys.path
+if readsmps_dir not in sys.path:
+    sys.path.append(readsmps_dir)
+
+from readSMPS.decmps_2slp import RandVars
+from readSMPS.create_master import create_master
+from itertools import product
 
 def solve_master(d):
     d.prob.master_model.setParam("OutputFlag", 0)
@@ -93,12 +101,12 @@ def calculate_probabilities(rand_vars):
 def main():
     start = time.time()
 
-    instance = "pgp2"
+    instance = "lands"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
     # Create model
-    d = create_model(instance, input_dir)
+    d = create_master(instance, input_dir)
 
     # Save the file in the newly created folder
     os.makedirs(output_dir, exist_ok=True)
