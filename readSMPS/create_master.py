@@ -3,16 +3,20 @@ import os
 
 instance = "lands"
 input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
-output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
+output_dir = (
+    f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
+)
+
 
 def create_master(instance, input_dir):
     d = decompose(f"{instance}", input_dir)
 
-    #Create master problem
+    # Create master problem
     d.find_stage_idx()
     d.create_master()
 
     return d
+
 
 d = create_master(instance, input_dir)
 
