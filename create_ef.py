@@ -19,7 +19,7 @@ from readSMPS.decmps_2slp import decompose
 def main():
     start = time.time()
 
-    instance = "lands"
+    instance = "lands2"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 

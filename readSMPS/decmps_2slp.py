@@ -44,10 +44,10 @@ class prob:
         self.master_const = self.mean_const
         # self.master_var_size  = 0
         # self.master_const_size= 0
-        self.sub_model = gb.Model("sub_")
-        self.sub_vars = self.mean_vars
-        self.sub_vars_s2 = self.mean_vars
-        self.sub_const = self.mean_const
+        # self.sub_model = gb.Model("sub_")
+        # self.sub_vars = self.mean_vars
+        # self.sub_vars_s2 = self.mean_vars
+        # self.sub_const = self.mean_const
         self.sub_var_size = 0
         self.sub_const_size = 0
 
@@ -204,7 +204,7 @@ class decompose:
                 ub=v.getAttr("UB"),
                 obj=v.getAttr("Obj"),
                 vtype=v.getAttr("VType"),
-                name=f"{v.getAttr('VarName')}_{iteration}",  # Rename variable
+                name=v.getAttr("VarName"),
             )
 
         self.prob.sub_model.update()
