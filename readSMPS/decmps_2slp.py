@@ -159,7 +159,6 @@ class decompose:
             self.prob.sub_model.update()
         self.prob.sub_const = self.prob.sub_model.getConstrs()
 
-    # Creating linear master
     def create_master(self):
         self.prob.master_vars = self.prob.master_vars[: self.tim.stage_idx_col[1]]
 
@@ -176,69 +175,36 @@ class decompose:
         self.prob.master_model.update()
         self.prob.master_vars = self.prob.master_model.getVars()
 
-        # Building the master objective function
-        obj_ = self.prob.mean_model.getObjective()
-        varName = [j.getAttr("VarName") for j in self.prob.master_vars]
-        newobj_ = gb.LinExpr()
-        for t in range(obj_.size()):
-            if obj_.getVar(t).getAttr("VarName") in varName:
-                newobj_ += (
-                    obj_.getCoeff(t)
-                    * self.prob.master_vars[
-                        varName.index(obj_.getVar(t).getAttr("VarName"))
-                    ]
-                )
-        self.prob.master_model.setObjective(newobj_)
         self.create_master_constr()
 
-    def create_sub(self, obs, iteration):
-        self.prob.sub_model = gb.Model(f"sub_{iteration}")
-
+    def create_sub(self, obs, prob, iteration):
+        self.prob.sub_model = gb.Model(
+            f"sub_{iteration}"
+        )  # Start with empty Gurobi model
         self.prob.sub_vars = self.prob.mean_vars
         self.prob.sub_vars_s2 = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
-        self.prob.sub_const = self.prob.mean_const
 
         for v in self.prob.sub_vars:
             self.prob.sub_model.addVar(
                 lb=v.getAttr("LB"),
                 ub=v.getAttr("UB"),
-                obj=v.getAttr("Obj"),
+                obj=prob * v.getAttr("Obj"),
                 vtype=v.getAttr("VType"),
-                name=v.getAttr("VarName"),
+                name=f"{v.getAttr('VarName')}_{iteration}",  # give the vars a new name
             )
 
         self.prob.sub_model.update()
         self.prob.sub_vars = self.prob.sub_model.getVars()
         self.prob.sub_vars_s2 = self.prob.sub_vars[self.tim.stage_idx_col[1] :]
 
-        # Building the sub objective function
-        obj_ = self.prob.mean_model.getObjective()
-        varName = [j.getAttr("VarName") for j in self.prob.sub_vars_s2]
-        newobj_ = gb.LinExpr()
-        for t in range(obj_.size()):
-            if obj_.getVar(t).getAttr("VarName") in varName:
-                newobj_ += (
-                    obj_.getCoeff(t)
-                    * self.prob.sub_vars_s2[
-                        varName.index(obj_.getVar(t).getAttr("VarName"))
-                    ]
-                )
+        # Set scalars of first-stage variables to 0 in objective
+        for v in self.prob.sub_vars:
+            if v.getAttr("VarName") not in [
+                var.getAttr("VarName") for var in self.prob.sub_vars_s2
+            ]:
+                v.setAttr(
+                    "VarName", v.getAttr("VarName").replace(f"_{iteration}", "")
+                )  # Set the original name
+                v.setAttr("Obj", 0)
 
-        self.prob.sub_model.setObjective(newobj_)
         self.create_sub_constr(obs, iteration)
-
-    # #creating the Lshaped subproblem
-    # def create_LSsub(self,obs,incmb):
-    #     self.prob.sub_model.remove(self.prob.sub_model.getVars())
-    #     self.prob.sub_model.remove(self.prob.sub_model.getConstrs())
-
-    #     #Create new variables
-    #     self.prob.sub_vars  = self.prob.mean_vars[self.tim.stage_idx_col[1]:]
-
-    #     for v in self.prob.sub_vars:
-    #         self.prob.sub_model.addVar(lb=v.getAttr("LB"), ub=v.getAttr("UB"), obj=v.getAttr("Obj"), vtype=v.getAttr("VType"), name=v.getAttr("VarName"))
-
-    #     self.prob.sub_model.update()
-    #     self.prob.sub_vars = self.prob.sub_model.getVars()
-
-    #     self.create_LSsub_constr(obs,incmb)
