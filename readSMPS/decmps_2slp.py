@@ -11,9 +11,6 @@ Created on May 4 - 2019
 @author: Siavash Tabrizian - stabrizian@smu.edu
 """
 
-import itertools
-import numpy as np
-
 from readCOR import readcor
 from readSTOC import readstoc
 from readTIM import readtim
@@ -39,17 +36,19 @@ class prob:
         self.mean_objVal = cor.mean_objVal
         self.mean_var_size = cor.mean_var_num
         self.mean_const_size = cor.mean_const_num
-        self.master_model = gb.Model("master")
+        self.extensive_form = gb.Model("extensive_form")
+        # self.master_model = gb.Model("master")
         self.master_vars = self.mean_vars
-        self.master_const = self.mean_const
-        # self.master_var_size  = 0
+        self.master_var_size = 0
+        # self.master_const = self.mean_const
         # self.master_const_size= 0
         # self.sub_model = gb.Model("sub_")
-        # self.sub_vars = self.mean_vars
-        # self.sub_vars_s2 = self.mean_vars
+        self.sub_vars = self.mean_vars
+        self.sub_vars_fixed = self.mean_vars
+        self.sub_vars_s2 = self.mean_vars
+        self.sub_var_s2_size = 0
         # self.sub_const = self.mean_const
-        self.sub_var_size = 0
-        self.sub_const_size = 0
+        # self.sub_const_size = 0
 
 
 class RandVars:
@@ -135,36 +134,40 @@ class decompose:
             empt = gb.LinExpr()
             for v in self.prob.master_vars:
                 empt += self.prob.mean_model.getCoeff(c, v) * v
-            self.prob.master_model.addConstr(
+            self.prob.extensive_form.addConstr(
                 empt, c.getAttr("Sense"), c.getAttr("RHS"), c.getAttr("ConstrName")
             )
-            self.prob.master_model.update()
-        self.prob.master_const = self.prob.master_model.getConstrs()
+            self.prob.extensive_form.update()
+        # self.prob.master_const = self.prob.extensive_form.getConstrs()
 
+    # Create subproblem constraints
     def create_sub_constr(self, obs, iteration):
         constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
         constr = self.replaceObs(obs, constr)
 
         for c in constr:
             empt = gb.LinExpr()
-            for v in self.prob.sub_vars:
-                empt += self.prob.mean_model.getCoeff(c, v) * v
+            for i, v in enumerate(self.prob.sub_vars):
+                w = self.prob.sub_vars_fixed[i]
+                empt += self.prob.mean_model.getCoeff(c, w) * v
 
-            self.prob.sub_model.addConstr(
+            self.prob.extensive_form.addConstr(
                 empt,
                 c.getAttr("Sense"),
                 c.getAttr("RHS"),
                 name=f"{c.getAttr('ConstrName')}_{iteration}",
             )
-            self.prob.sub_model.update()
-        self.prob.sub_const = self.prob.sub_model.getConstrs()
+            self.prob.extensive_form.update()
+        # self.prob.sub_const = self.prob.extensive_form.getConstrs()
 
     def create_master(self):
         self.prob.master_vars = self.prob.master_vars[: self.tim.stage_idx_col[1]]
 
+        self.prob.master_var_size = len(self.prob.master_vars)
+
         # Create surrogate variables
         for v in self.prob.master_vars:
-            self.prob.master_model.addVar(
+            self.prob.extensive_form.addVar(
                 lb=v.getAttr("LB"),
                 ub=v.getAttr("UB"),
                 obj=v.getAttr("Obj"),
@@ -172,20 +175,21 @@ class decompose:
                 name=v.getAttr("VarName"),
             )
 
-        self.prob.master_model.update()
-        self.prob.master_vars = self.prob.master_model.getVars()
+        self.prob.extensive_form.update()
+
+        self.prob.master_vars = self.prob.extensive_form.getVars()
 
         self.create_master_constr()
 
     def create_sub(self, obs, prob, iteration):
-        self.prob.sub_model = gb.Model(
-            f"sub_{iteration}"
-        )  # Start with empty Gurobi model
         self.prob.sub_vars = self.prob.mean_vars
+        self.prob.sub_vars_fixed = self.prob.sub_vars
         self.prob.sub_vars_s2 = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
 
-        for v in self.prob.sub_vars:
-            self.prob.sub_model.addVar(
+        self.prob.sub_var_s2_size = len(self.prob.sub_vars_s2)
+
+        for v in self.prob.sub_vars_s2:
+            self.prob.extensive_form.addVar(
                 lb=v.getAttr("LB"),
                 ub=v.getAttr("UB"),
                 obj=prob * v.getAttr("Obj"),
@@ -193,18 +197,13 @@ class decompose:
                 name=f"{v.getAttr('VarName')}_{iteration}",  # give the vars a new name
             )
 
-        self.prob.sub_model.update()
-        self.prob.sub_vars = self.prob.sub_model.getVars()
-        self.prob.sub_vars_s2 = self.prob.sub_vars[self.tim.stage_idx_col[1] :]
+        self.prob.extensive_form.update()
 
-        # Rename first-stage vars and set scalars in objective to 0
-        for v in self.prob.sub_vars:
-            if v.getAttr("VarName") not in [
-                var.getAttr("VarName") for var in self.prob.sub_vars_s2
-            ]:
-                v.setAttr(
-                    "VarName", v.getAttr("VarName").replace(f"_{iteration}", "")
-                )  # Set the original name
-                v.setAttr("Obj", 0)
+        self.prob.sub_vars = self.prob.extensive_form.getVars()
+        self.prob.sub_vars = (
+            self.prob.sub_vars[: self.prob.master_var_size]
+            + self.prob.sub_vars[-self.prob.sub_var_s2_size :]
+        )
+        self.prob.sub_vars_s2 = self.prob.sub_vars[-self.prob.sub_var_s2_size :]
 
         self.create_sub_constr(obs, iteration)

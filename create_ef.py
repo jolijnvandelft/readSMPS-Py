@@ -1,5 +1,3 @@
-import gurobipy as gb
-import numpy as np
 import os
 import time
 import sys
@@ -18,7 +16,7 @@ from readSMPS.decmps_2slp import decompose
 def main():
     start = time.time()
 
-    instance = "lands"
+    instance = "lands2"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
@@ -27,17 +25,24 @@ def main():
     d.find_stage_idx()
     d.create_master()
 
-    os.makedirs(output_dir, exist_ok=True)
-    master_file = os.path.join(output_dir, "master.lp")
-    d.prob.master_model.write(master_file)
-
     rand_vars = RandVars(d.name)
 
     for i, obs in enumerate(rand_vars.observations, start=1):
         prob = rand_vars.probabilities[i - 1]
         d.create_sub(obs, prob, i)
-        sub_file = os.path.join(output_dir, f"sub_{i}.lp")
-        d.prob.sub_model.write(sub_file)
+
+    os.makedirs(output_dir, exist_ok=True)
+    extensive_form_file = os.path.join(output_dir, "extensive_form.lp")
+    d.prob.extensive_form.write(extensive_form_file)
+
+    d.prob.extensive_form.optimize()
+
+    obj_value = d.prob.extensive_form.ObjVal
+    print(f"Objective Value: {obj_value}")
+
+    # Retrieve first-stage variable values
+    for v in d.prob.extensive_form.getVars()[: d.prob.master_var_size]:
+        print(f"{v.VarName} = {v.X}")
 
 
 if __name__ == "__main__":
