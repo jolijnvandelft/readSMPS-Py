@@ -39,7 +39,7 @@ class prob:
         self.mean_objVal = cor.mean_objVal
         self.mean_var_size = cor.mean_var_num
         self.mean_const_size = cor.mean_const_num
-        self.master_model = gb.Model("master_")
+        self.master_model = gb.Model("master")
         self.master_vars = self.mean_vars
         self.master_const = self.mean_const
         # self.master_var_size  = 0
@@ -197,7 +197,7 @@ class decompose:
         self.prob.sub_vars = self.prob.sub_model.getVars()
         self.prob.sub_vars_s2 = self.prob.sub_vars[self.tim.stage_idx_col[1] :]
 
-        # Set scalars of first-stage variables to 0 in objective
+        # Rename first-stage vars and set scalars in objective to 0
         for v in self.prob.sub_vars:
             if v.getAttr("VarName") not in [
                 var.getAttr("VarName") for var in self.prob.sub_vars_s2

@@ -3,7 +3,6 @@ import numpy as np
 import os
 import time
 import sys
-import itertools
 
 # Get the directory containing readSMPS
 readsmps_dir = "/Users/jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS"
@@ -19,7 +18,7 @@ from readSMPS.decmps_2slp import decompose
 def main():
     start = time.time()
 
-    instance = "lands2"
+    instance = "lands"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 

@@ -1,5 +1,5 @@
 * ENCODING=ISO-8859-1
-NAME          orig.lp
+NAME          baa99
 ROWS
  N  obj     
  E  d1    
