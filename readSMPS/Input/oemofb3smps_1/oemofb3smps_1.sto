@@ -1,5 +1,0 @@
-STOCH         oemofb3smps_1       
-INDEP         DISCRETE
-    RHS       Stoch1  3.8061154334889179e+03   1.0
-ENDATA
-
