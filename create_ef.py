@@ -16,7 +16,7 @@ from readSMPS.decmps_2slp import decompose
 def main():
     start = time.time()
 
-    instance = "lands2"
+    instance = "ssn"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
@@ -27,13 +27,15 @@ def main():
 
     rand_vars = RandVars(d.name)
 
+    print("TEST",len(rand_vars.observations))
+
     for i, obs in enumerate(rand_vars.observations, start=1):
         prob = rand_vars.probabilities[i - 1]
         d.create_sub(obs, prob, i)
 
     os.makedirs(output_dir, exist_ok=True)
     extensive_form_file = os.path.join(output_dir, "extensive_form.lp")
-    d.prob.extensive_form.write(extensive_form_file)
+    # d.prob.extensive_form.write(extensive_form_file)
 
     d.prob.extensive_form.optimize()
 
