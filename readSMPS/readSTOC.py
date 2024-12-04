@@ -11,9 +11,6 @@ Created on May 4 - 2019
 @author: Siavash Tabrizian - stabrizian@smu.edu
 """
 
-import itertools
-import numpy as np
-
 
 class readstoc:
     def __init__(self, name):
@@ -22,8 +19,6 @@ class readstoc:
         self.dist = list()
         self.cumul_dist = list()
         self.rvnum = 0
-        self.observations = None
-        self.probabilities = None
 
     ## Read the stoc file
     def readfile(self):
@@ -53,12 +48,3 @@ class readstoc:
 
         # count contains the number of rvs
         self.rvnum = count
-
-    def get_obs_probs(self):
-        # After processing the stochastic data, compute observations and probabilities
-        rand_vars_values = [list(self.dist[i].keys()) for i in range(len(self.rv))]
-        self.observations = list(itertools.product(*rand_vars_values))
-
-        rand_vars_probs = [list(self.dist[i].values()) for i in range(len(self.rv))]
-        combinations = itertools.product(*rand_vars_probs)
-        self.probabilities = [np.prod(combination) for combination in combinations]

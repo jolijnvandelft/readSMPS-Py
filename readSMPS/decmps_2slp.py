@@ -56,13 +56,10 @@ class RandVars:
         # Import stochastic information
         stoc = readstoc(name)
         stoc.readfile()
-        stoc.get_obs_probs()
         self.rv = stoc.rv
         self.dist = stoc.dist
         self.cumul_dist = stoc.cumul_dist
         self.rvnum = stoc.rvnum
-        self.observations = stoc.observations
-        self.probabilities = stoc.probabilities
 
 
 class TIME:
