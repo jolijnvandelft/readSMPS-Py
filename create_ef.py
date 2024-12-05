@@ -5,6 +5,8 @@ import sys
 import itertools
 import numpy as np
 import random
+import gurobipy as gb
+
 
 # Get the directory containing readSMPS
 readsmps_dir = "/Users/jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS"
@@ -64,43 +66,60 @@ def get_obs_probs(rvs, sampling=False, N=None):
     return observations, probabilities
 
 
-def main():
-    start = time.time()
+def create_ef(model, observations, probabilities):
+    for i, obs in enumerate(observations, start=1):
+        prob = probabilities[i - 1]
+        model.create_sub(obs, prob, i)
 
-    instance = "storm"
+
+def main():
+    start_main = time.time()
+
+    instance = "20"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
-    d = decompose(f"{instance}", input_dir)
+    sampling = True
+    N = 50
+    replications = 5
 
-    d.find_stage_idx()
-    d.create_master()
+    for j in range(1, replications + 1):
+        start_rep = time.time()
 
-    rand_vars = RandVars(d.name)
+        print("Replication:", j)
 
-    observations, probabilities = get_obs_probs(rand_vars, sampling=True, N=100)
+        d = decompose(f"{instance}", input_dir)
+        d.find_stage_idx()
+        d.create_master(j)
 
-    for i, obs in enumerate(observations, start=1):
-        prob = probabilities[i - 1]
-        d.create_sub(obs, prob, i)
+        rand_vars = RandVars(d.name)
+        observations, probabilities = get_obs_probs(rand_vars, sampling, N)
 
-    os.makedirs(output_dir, exist_ok=True)
-    extensive_form_file = os.path.join(output_dir, "extensive_form.lp")
-    # d.prob.extensive_form.write(extensive_form_file)
+        create_ef(d, observations, probabilities)
 
-    d.prob.extensive_form.setParam("OutputFlag", 0)
-    d.prob.extensive_form.optimize()
+        # Optionally save file as 'extensive_form_{j}.lp' in output directory
+        os.makedirs(output_dir, exist_ok=True)
+        extensive_form_file = os.path.join(output_dir, f"extensive_form_{j}.lp")
+        d.prob.extensive_form.write(extensive_form_file)
 
-    end = time.time()  # Record the end time
-    elapsed_time = end - start  # Calculate the elapsed time
-    print(f"Solved in {elapsed_time:.2f} seconds")  # Print the elapsed time
+        # Solve the extensive form
+        d.prob.extensive_form.setParam("OutputFlag", 0)
+        d.prob.extensive_form.optimize()
 
-    obj_value = d.prob.extensive_form.ObjVal
-    print(f"Objective Value: {obj_value}")
+        obj_value = d.prob.extensive_form.ObjVal
+        print(f"Objective Value: {obj_value}")
 
-    # Retrieve first-stage variable values
-    for v in d.prob.extensive_form.getVars()[: d.prob.master_var_size]:
-        print(f"{v.VarName} = {v.X}")
+        # Retrieve first-stage variable values
+        for v in d.prob.extensive_form.getVars()[: d.prob.master_var_size]:
+            print(f"{v.VarName} = {v.X}")
+
+        end_rep = time.time()
+        rep_time = end_rep - start_rep
+        print(f"Replication {j} completed in {rep_time:.2f} seconds.")
+
+    end_main = time.time()  # Record the end time
+    total_time = end_main - start_main  # Calculate the elapsed time
+    print(f"Total time for main: {total_time:.2f} seconds.")
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ class prob:
         self.mean_objVal = cor.mean_objVal
         self.mean_var_size = cor.mean_var_num
         self.mean_const_size = cor.mean_const_num
-        self.extensive_form = gb.Model("extensive_form")
+        # self.extensive_form = gb.Model("extensive_form")
         # self.master_model = gb.Model("master")
         self.master_vars = self.mean_vars
         self.master_var_size = 0
@@ -157,7 +157,9 @@ class decompose:
             self.prob.extensive_form.update()
         # self.prob.sub_const = self.prob.extensive_form.getConstrs()
 
-    def create_master(self):
+    def create_master(self, rep):
+        self.prob.extensive_form = gb.Model(f"extensive_form_{rep}")
+
         self.prob.master_vars = self.prob.master_vars[: self.tim.stage_idx_col[1]]
 
         self.prob.master_var_size = len(self.prob.master_vars)

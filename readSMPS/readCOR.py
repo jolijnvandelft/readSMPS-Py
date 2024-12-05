@@ -26,7 +26,6 @@ class readcor:
     def get_mean(self):
         self.mean_vars = self.mean_model.getVars()
         self.mean_const = self.mean_model.getConstrs()
-        # print("self.mean_const", self.mean_const)
         self.mean_model.setParam("OutputFlag", 0)
         self.mean_model.optimize()
         # print ('Mean value optimal: ', self.mean_model.objVal)
