@@ -36,19 +36,6 @@ class prob:
         self.mean_objVal = cor.mean_objVal
         self.mean_var_size = cor.mean_var_num
         self.mean_const_size = cor.mean_const_num
-        # self.extensive_form = gb.Model("extensive_form")
-        # self.master_model = gb.Model("master")
-        self.master_vars = self.mean_vars
-        self.master_var_size = 0
-        # self.master_const = self.mean_const
-        # self.master_const_size= 0
-        # self.sub_model = gb.Model("sub_")
-        self.sub_vars = self.mean_vars
-        self.sub_vars_fixed = self.mean_vars
-        self.sub_vars_s2 = self.mean_vars
-        self.sub_var_s2_size = 0
-        # self.sub_const = self.mean_const
-        # self.sub_const_size = 0
 
 
 class RandVars:
@@ -135,7 +122,6 @@ class decompose:
                 empt, c.getAttr("Sense"), c.getAttr("RHS"), c.getAttr("ConstrName")
             )
             self.prob.extensive_form.update()
-        # self.prob.master_const = self.prob.extensive_form.getConstrs()
 
     # Create subproblem constraints
     def create_sub_constr(self, obs, iteration):
@@ -155,12 +141,12 @@ class decompose:
                 name=f"{c.getAttr('ConstrName')}_{iteration}",
             )
             self.prob.extensive_form.update()
-        # self.prob.sub_const = self.prob.extensive_form.getConstrs()
 
     def create_master(self, rep):
+        # Start with an empty Gurobi model in each replication
         self.prob.extensive_form = gb.Model(f"extensive_form_{rep}")
 
-        self.prob.master_vars = self.prob.master_vars[: self.tim.stage_idx_col[1]]
+        self.prob.master_vars = self.prob.mean_vars[: self.tim.stage_idx_col[1]]
 
         self.prob.master_var_size = len(self.prob.master_vars)
 
@@ -206,3 +192,20 @@ class decompose:
         self.prob.sub_vars_s2 = self.prob.sub_vars[-self.prob.sub_var_s2_size :]
 
         self.create_sub_constr(obs, iteration)
+
+    # def create_LSsub(self, obs, incmb):
+    #     self.prob.LSsub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
+    #     self.prob.LSsub_const = self.prob.mean_const[self.tim.stage_idx_col[1] :]
+
+    #     for v in self.prob.LSsub_vars:
+    #         self.prob.LSsub_model.addVar(
+    #             lb=v.getAttr("LB"),
+    #             ub=v.getAttr("UB"),
+    #             obj=v.getAttr("Obj"),
+    #             vtype=v.getAttr("VType"),
+    #             name=v.getAttr("VarName"),
+    #         )
+    #     self.prob.LSsub_model.update()
+    #     self.prob.LSsub_vars = self.prob.sub_model.getVars()
+
+    #     # self.create_sub_constr(obs,incmb)

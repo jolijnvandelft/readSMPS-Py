@@ -5,8 +5,7 @@ import sys
 import itertools
 import numpy as np
 import random
-import gurobipy as gb
-
+from scipy.stats import norm
 
 # Get the directory containing readSMPS
 readsmps_dir = "/Users/jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS"
@@ -19,13 +18,7 @@ from readSMPS.decmps_2slp import RandVars
 from readSMPS.decmps_2slp import decompose
 
 
-def get_obs_probs(rvs, sampling=False, N=None):
-    print("The number of random variables equals:", rvs.rvnum)
-    if rvs.rvnum != len(rvs.dist):
-        raise ValueError(
-            "The number of random variables (rv) must match the number random variables in the dictionary."
-        )
-
+def get_obs_probs(rvs, sampling=False, iterations=None):
     if not sampling:
         # After processing the stochastic data, compute observations and probabilities
         rand_vars_values = [list(rvs.dist[i].keys()) for i in range(len(rvs.rv))]
@@ -38,20 +31,9 @@ def get_obs_probs(rvs, sampling=False, N=None):
         print("The number of scenarios equals:", len(observations))
 
     else:
-        if N is None:
-            try:
-                N = int(
-                    input("Please enter the number of samples (N): ")
-                )  # Get N from the user
-                if N <= 0:
-                    raise ValueError("N must be a positive integer.")
-            except ValueError as e:
-                raise ValueError(
-                    f"Invalid input for N: {e}"
-                )  # Raise an error if input is invalid
-
         observations = []
-        for _ in range(N):
+
+        for _ in range(iterations):
             sample_tuple = []
             for rv in rvs.dist:
                 outcomes, probs = zip(*rv.items())  # Extract outcomes and probabilities
@@ -61,61 +43,109 @@ def get_obs_probs(rvs, sampling=False, N=None):
                 sample_tuple.append(sampled_outcome)
             observations.append(tuple(sample_tuple))
 
-        probabilities = [1 / N] * N  # Equal probability for each sampled observation
+        probabilities = [
+            1 / iterations
+        ] * iterations  # Equal probability for each sampled observation
 
     return observations, probabilities
 
 
-def create_ef(model, observations, probabilities):
-    for i, obs in enumerate(observations, start=1):
-        prob = probabilities[i - 1]
-        model.create_sub(obs, prob, i)
+def create_ef(model, sampling=False, iterations=None, replication=0):
+    rand_vars = RandVars(model.name)
+    observations, probabilities = get_obs_probs(rand_vars, sampling, iterations)
+
+    model.create_master(replication)
+
+    for iteration, obs in enumerate(observations, start=1):
+        prob = probabilities[iteration - 1]
+        model.create_sub(obs, prob, iteration)
+
+    # # Optionally save file as 'extensive_form.lp' in output directory
+    # os.makedirs(output_dir, exist_ok=True)
+    # extensive_form_file = os.path.join(output_dir, f"extensive_form_{replication}.lp")
+    # d.prob.extensive_form.write(extensive_form_file)
+
+    # Solve the extensive form
+    model.prob.extensive_form.setParam("OutputFlag", 0)
+    model.prob.extensive_form.optimize()
+
+    obj_value = model.prob.extensive_form.ObjVal
+
+    # Retrieve first-stage variable values
+    first_stage_sol = {}
+    for v in model.prob.extensive_form.getVars()[: model.prob.master_var_size]:
+        first_stage_sol[v.VarName] = v.X
+
+    return obj_value, first_stage_sol
+
+
+def lower_bound(lo_bnd_list, alpha=0.05):
+    M = len(lo_bnd_list)
+
+    mean = sum(lo_bnd_list) / len(lo_bnd_list)
+    diff = [(v - mean) for v in lo_bnd_list]
+    sum_sqr_diff = sum([d**2 for d in diff])
+
+    sample_var_est = sum_sqr_diff / (M - 1)
+
+    beta = alpha / 2
+    z_beta = norm.ppf(1 - beta)
+
+    lo_bnd = mean - z_beta * sample_var_est / np.sqrt(M)
+    up_bnd = mean + z_beta * sample_var_est / np.sqrt(M)
+
+    conf_interval = (lo_bnd, up_bnd)
+
+    return mean, conf_interval
 
 
 def main():
     start_main = time.time()
 
-    instance = "20"
+    instance = "lands2"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
     sampling = True
-    N = 50
-    replications = 5
 
-    for j in range(1, replications + 1):
-        start_rep = time.time()
+    # Set parameters for the case sampling = True
+    iterations = 20
+    replications = 100
+    bounds = True
 
-        print("Replication:", j)
+    d = decompose(f"{instance}", input_dir)
+    d.find_stage_idx()
 
-        d = decompose(f"{instance}", input_dir)
-        d.find_stage_idx()
-        d.create_master(j)
+    if not sampling:
+        obj_value, first_stage_sol = create_ef(
+            d, sampling, iterations=None, replication=0
+        )
 
-        rand_vars = RandVars(d.name)
-        observations, probabilities = get_obs_probs(rand_vars, sampling, N)
+        print("Objective Value:", obj_value)
+        print("First-stage solution:", first_stage_sol)
 
-        create_ef(d, observations, probabilities)
+    else:
+        objective_values = []
 
-        # Optionally save file as 'extensive_form_{j}.lp' in output directory
-        os.makedirs(output_dir, exist_ok=True)
-        extensive_form_file = os.path.join(output_dir, f"extensive_form_{j}.lp")
-        d.prob.extensive_form.write(extensive_form_file)
+        for replication in range(replications):
+            start_rep = time.time()
 
-        # Solve the extensive form
-        d.prob.extensive_form.setParam("OutputFlag", 0)
-        d.prob.extensive_form.optimize()
+            obj_value, first_stage_sol = create_ef(d, sampling, iterations, replication)
+            objective_values.append(obj_value)
 
-        obj_value = d.prob.extensive_form.ObjVal
-        print(f"Objective Value: {obj_value}")
+            # print("Replication:", replication + 1)
+            # print("Objective Value:", obj_value)
+            # print("First-stage solution:", first_stage_sol)
 
-        # Retrieve first-stage variable values
-        for v in d.prob.extensive_form.getVars()[: d.prob.master_var_size]:
-            print(f"{v.VarName} = {v.X}")
+            end_rep = time.time()
+            rep_time = end_rep - start_rep
+            print(f"Replication {replication+1} completed in {rep_time:.2f} seconds.")
 
-        end_rep = time.time()
-        rep_time = end_rep - start_rep
-        print(f"Replication {j} completed in {rep_time:.2f} seconds.")
+        if bounds == True:
+            lo_bound, lo_bound_conf_interval = lower_bound(objective_values)
+
+            print("Lower bound estimate:", lo_bound)
+            print("Lower bound confidence interval:", lo_bound_conf_interval)
 
     end_main = time.time()  # Record the end time
     total_time = end_main - start_main  # Calculate the elapsed time
