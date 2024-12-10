@@ -50,15 +50,38 @@ def get_obs_probs(rvs, sampling=False, iterations=None):
     return observations, probabilities
 
 
-def create_ef(model, sampling=False, iterations=None, replication=0):
+def create_ef(
+    model, sampling=False, iterations=None, replication=0, upper_bound=False, xhat=None
+):
     rand_vars = RandVars(model.name)
     observations, probabilities = get_obs_probs(rand_vars, sampling, iterations)
 
     model.create_master(replication)
 
-    for iteration, obs in enumerate(observations, start=1):
-        prob = probabilities[iteration - 1]
-        model.create_sub(obs, prob, iteration)
+    if not upper_bound:
+        for iteration, obs in enumerate(observations, start=1):
+            prob = probabilities[iteration - 1]
+            model.create_sub(obs, prob, iteration)
+        up_bound = None
+
+    if upper_bound and replication > 0:
+        variables = model.prob.extensive_form.getVars()
+        cost_coeff = [var.getAttr("Obj") for var in variables]
+
+        recourse_val_list = []
+        for iteration, obs in enumerate(observations, start=1):
+            prob = probabilities[iteration - 1]
+            model.create_sub(obs, prob, iteration)
+
+            model.create_LSsub(obs, xhat)
+            model.prob.sub_model.setParam("OutputFlag", 0)
+            model.prob.sub_model.optimize()
+            recourse_val = model.prob.sub_model.objVal
+            recourse_val_list.append(recourse_val)
+
+        mean_recourse_val = sum(recourse_val_list) / len(recourse_val_list)
+
+        up_bound = np.dot(cost_coeff, xhat) + mean_recourse_val
 
     # # Optionally save file as 'extensive_form.lp' in output directory
     # os.makedirs(output_dir, exist_ok=True)
@@ -76,14 +99,14 @@ def create_ef(model, sampling=False, iterations=None, replication=0):
     for v in model.prob.extensive_form.getVars()[: model.prob.master_var_size]:
         first_stage_sol[v.VarName] = v.X
 
-    return obj_value, first_stage_sol
+    return obj_value, first_stage_sol, up_bound
 
 
-def lower_bound(lo_bnd_list, alpha=0.05):
-    M = len(lo_bnd_list)
+def confidence_interval(value_list, alpha=0.05):
+    M = len(value_list)
 
-    mean = sum(lo_bnd_list) / len(lo_bnd_list)
-    diff = [(v - mean) for v in lo_bnd_list]
+    mean = sum(value_list) / len(value_list)
+    diff = [(v - mean) for v in value_list]
     sum_sqr_diff = sum([d**2 for d in diff])
 
     sample_var_est = sum_sqr_diff / (M - 1)
@@ -102,50 +125,91 @@ def lower_bound(lo_bnd_list, alpha=0.05):
 def main():
     start_main = time.time()
 
-    instance = "lands2"
+    instance = "lands3"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
     sampling = True
 
     # Set parameters for the case sampling = True
-    iterations = 20
-    replications = 100
-    bounds = True
+    iterations = 50
+    replications = 1000
+    upper_bound = True
 
     d = decompose(f"{instance}", input_dir)
     d.find_stage_idx()
 
     if not sampling:
-        obj_value, first_stage_sol = create_ef(
-            d, sampling, iterations=None, replication=0
+        obj_value, first_stage_sol, up_bound = create_ef(
+            d, sampling, iterations=None, replication=0, upper_bound=False, xhat=None
         )
 
-        print("Objective Value:", obj_value)
-        print("First-stage solution:", first_stage_sol)
+        print(f"Objective Value: {obj_value:.2f}")
+        print("First-Stage Solution:")
+        for var, value in first_stage_sol.items():
+            print(f"  {var}: {value:.2f}")
 
     else:
-        objective_values = []
+        obj_val_SAA_list = []
+        first_stage_sol_SAA_list = []
 
-        for replication in range(replications):
-            start_rep = time.time()
+        if not upper_bound:
+            for replication in range(1, replications + 1):
+                start_rep = time.time()
 
-            obj_value, first_stage_sol = create_ef(d, sampling, iterations, replication)
-            objective_values.append(obj_value)
+                obj_value_SAA, first_stage_sol_SAA, up_bound = create_ef(
+                    d, sampling, iterations, replication, upper_bound, xhat=None
+                )
+                obj_val_SAA_list.append(obj_value_SAA)
+                first_stage_sol_SAA_list.append(first_stage_sol_SAA)
 
-            # print("Replication:", replication + 1)
-            # print("Objective Value:", obj_value)
-            # print("First-stage solution:", first_stage_sol)
+                end_rep = time.time()
+                rep_time = end_rep - start_rep
+                if replication % 50 == 0:
+                    print(f"Replication {replication} completed in {rep_time:.2f} seconds.")
 
-            end_rep = time.time()
-            rep_time = end_rep - start_rep
-            print(f"Replication {replication+1} completed in {rep_time:.2f} seconds.")
+        else:
+            # "Extra" replication for obtaining near optimal x_hat to compute upper bound
+            obj_value, x_hat, up_bound = create_ef(
+                d, sampling, iterations, replication=0, upper_bound=False, xhat=None
+            )
+            x_hat = list(x_hat.values())
 
-        if bounds == True:
-            lo_bound, lo_bound_conf_interval = lower_bound(objective_values)
+            up_bound_list = []
+            for replication in range(1, replications + 1):
+                start_rep = time.time()
 
-            print("Lower bound estimate:", lo_bound)
-            print("Lower bound confidence interval:", lo_bound_conf_interval)
+                obj_value_SAA, first_stage_sol_SAA, up_bound = create_ef(
+                    d, sampling, iterations, replication, upper_bound, x_hat
+                )
+                obj_val_SAA_list.append(obj_value_SAA)
+                first_stage_sol_SAA_list.append(first_stage_sol_SAA)
+                up_bound_list.append(up_bound)
+
+                end_rep = time.time()
+                rep_time = end_rep - start_rep
+                if replication % 50 == 0:
+                    print(f"Replication {replication} completed in {rep_time:.2f} seconds.")
+
+            up_bound, up_bound_conf_interval = confidence_interval(up_bound_list)
+            print(f"Upper Bound Estimate: {up_bound:.2f}")
+            print(f"  Confidence Interval: [{up_bound_conf_interval[0]:.2f}, {up_bound_conf_interval[1]:.2f}]")
+
+
+        lo_bound, lo_bound_conf_interval = confidence_interval(obj_val_SAA_list)
+
+        print(f"Lower Bound Estimate: {lo_bound:.2f}")
+        print(f"  Confidence Interval: [{lo_bound_conf_interval[0]:.2f}, {lo_bound_conf_interval[1]:.2f}]")
+
+        averages = {}
+        for key in first_stage_sol_SAA_list[0].keys():  # Loop through the keys in the first dictionary
+            # Calculate the average value for this key across all replications
+            avg_value = sum(rep[key] for rep in first_stage_sol_SAA_list) / len(first_stage_sol_SAA_list)
+            averages[key] = avg_value
+       
+        print("Average first-stage solution:")
+        for key, avg in averages.items():
+            print(f"  {key}: {avg:.2f}")
 
     end_main = time.time()  # Record the end time
     total_time = end_main - start_main  # Calculate the elapsed time
