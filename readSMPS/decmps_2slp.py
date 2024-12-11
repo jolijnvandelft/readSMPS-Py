@@ -142,9 +142,9 @@ class decompose:
             )
             self.prob.extensive_form.update()
 
-    def create_master(self, rep):
+    def create_master(self):
         # Start with an empty Gurobi model in each replication
-        self.prob.extensive_form = gb.Model(f"extensive_form_{rep}")
+        self.prob.extensive_form = gb.Model(f"extensive_form")
 
         self.prob.master_vars = self.prob.mean_vars[: self.tim.stage_idx_col[1]]
 

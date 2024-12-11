@@ -56,7 +56,7 @@ def create_ef(
     rand_vars = RandVars(model.name)
     observations, probabilities = get_obs_probs(rand_vars, sampling, iterations)
 
-    model.create_master(replication)
+    model.create_master()
 
     if not upper_bound:
         for iteration, obs in enumerate(observations, start=1):
@@ -133,7 +133,7 @@ def main():
 
     # Set parameters for the case sampling = True
     iterations = 50
-    replications = 1000
+    replications = 200
     upper_bound = True
 
     d = decompose(f"{instance}", input_dir)
