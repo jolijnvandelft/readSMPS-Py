@@ -129,7 +129,6 @@ class decompose:
         constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
         constr = self.replaceObs(obs, constr)
         for c in constr:
-            print("constraint c", c)
             empt = gb.LinExpr()
             Cx = 0
             for i, v in enumerate(self.prob.sub_vars):
