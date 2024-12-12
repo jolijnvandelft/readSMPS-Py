@@ -70,7 +70,7 @@ def add_optimality_cut(d, Beta, beta, eta, iteration):
     )  # Assuming the last variable is eta
     cut_expr.addTerms(1.0, eta)
 
-    cut_name = f"cut_{iteration}"
+    cut_name = f"optimality_cut_{iteration}"
     d.prob.master_model.addLConstr(cut_expr, gb.GRB.GREATER_EQUAL, beta, cut_name)
 
 
@@ -86,16 +86,16 @@ def main():
 
     d = decompose(f"{instance}", input_dir)
     d.find_stage_idx()
-    T_mat = get_T_mat(model=d)
+    T_mat = get_T_mat(d)
 
     # START of L-shaped method
 
     d.create_master()
 
     # Optionally save file as 'master.lp' in output directory
-    os.makedirs(output_dir, exist_ok=True)
-    master_model = os.path.join(output_dir, "master_0.lp")
-    d.prob.master_model.write(master_model)
+    # os.makedirs(output_dir, exist_ok=True)
+    # master_model = os.path.join(output_dir, "master_0.lp")
+    # d.prob.master_model.write(master_model)
 
     d.prob.master_model.setParam("OutputFlag", 0)
     d.prob.master_model.optimize()
@@ -111,8 +111,18 @@ def main():
     up_bound = np.infty
     epsilon = 10e-6
 
-    while not convergence_criterion and k < 6:
+    # Create list of h_vec (for incmb fixed)
+    incmb_zero = [0] * (len(d.prob.master_vars) - 1)
+    h_vec_list = []
+    for obs in observations:
+        d.create_LSsub(obs, incmb_zero)
+        h_vec = np.array([const.RHS for const in d.prob.sub_model.getConstrs()])
+        h_vec_list.append(h_vec)
+
+    while not convergence_criterion:
+        print("k:", k)
         # Step 1: Check if x is in K2
+        # ToDo
 
         # Step 2: Compute an optimality cut
         Beta = 0
@@ -125,9 +135,11 @@ def main():
             d.prob.sub_model.optimize()
             obj_value = d.prob.sub_model.objVal
             # sub_model = os.path.join(output_dir, f"sub_{i}.lp")
-            sub_const = d.prob.sub_model.getConstrs()
-            h_vec = np.array(d.prob.sub_model.getAttr("RHS", sub_const))
-            dual_mult = np.array(d.prob.sub_model.getAttr("Pi", sub_const))
+
+            dual_mult = np.array(
+                d.prob.sub_model.getAttr("Pi", d.prob.sub_model.getConstrs())
+            )
+            h_vec = h_vec_list[i]
 
             prob = probabilities[i]
             Beta_sum = np.dot(dual_mult.T, T_mat)
@@ -148,9 +160,9 @@ def main():
 
         # Step 3: solve master program
         d.prob.master_model.optimize()
-        master_model = os.path.join(output_dir, f"master_{k}.lp")
-        d.prob.master_model.write(master_model)
-        
+        # master_model = os.path.join(output_dir, f"master_{k}.lp")
+        # d.prob.master_model.write(master_model)
+
         incmb = [var.X for var in d.prob.master_vars][:-1]
         master_obj_value = d.prob.master_model.objVal
 
@@ -158,16 +170,15 @@ def main():
         if new_lo_bound >= lo_bound:
             lo_bound = new_lo_bound
 
-        print("up_bound", up_bound)
-        print("lo_bound", lo_bound)
-
         if abs(up_bound - lo_bound) < epsilon:
             convergence_criterion = True
-            print(f"Optimal solution: {x_opt}")
-            print(f"Objective Value: {round(obj_value, 2)}")
+            print("Solution of first-stage variables:")
+            for var, value in zip(d.prob.master_vars[:-1], x_opt):
+                print(f"    {var.varName}: {value:.2f}")
+            print(f"Objective Value: {round(master_obj_value, 2)}")
 
         else:
-            k+=1
+            k += 1
 
     end_main = time.time()  # Record the end time
     total_time = end_main - start_main  # Calculate the elapsed time
