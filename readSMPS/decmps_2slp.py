@@ -111,6 +111,42 @@ class decompose:
 
         return constr
 
+    # Creating linear master with one surrogates (\eta)
+    def create_master(self, method):
+        if method == "L-shaped":
+            self.prob.master_model = gb.Model("master_")
+        if method == "extensive_form":
+            self.prob.master_model = gb.Model("extensive_form")
+
+        self.prob.master_vars = self.prob.mean_vars[: self.tim.stage_idx_col[1]]
+        self.prob.master_var_size = len(self.prob.master_vars)
+
+        # Create surrogate variables
+        for v in self.prob.master_vars:
+            self.prob.master_model.addVar(
+                lb=v.getAttr("LB"),
+                ub=v.getAttr("UB"),
+                obj=v.getAttr("Obj"),
+                vtype=v.getAttr("VType"),
+                name=v.getAttr("VarName"),
+            )
+
+        self.prob.master_model.update()
+        self.prob.master_vars = self.prob.master_model.getVars()
+
+        if method == "L-shaped":
+            eta = self.prob.master_model.addVar(
+                lb=0.0,
+                ub=gb.GRB.INFINITY,
+                obj=1.0,
+                vtype=gb.GRB.CONTINUOUS,
+                name="\eta",
+            )
+            self.prob.master_model.update()
+            self.prob.master_vars.append(eta)
+
+        self.create_master_constr()
+
     # Create master constraints
     def create_master_constr(self):
         constr = self.prob.mean_const[: self.tim.stage_idx_row[1]]
@@ -123,6 +159,27 @@ class decompose:
             )
             self.prob.master_model.update()
         # self.prob.master_const = self.prob.master_model.getConstrs()
+
+    # creating the Lshaped subproblem
+    def create_LSsub(self, obs, incmb):
+        self.prob.sub_model = gb.Model("sub_")
+        self.prob.sub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
+        self.prob.sub_vars_fixed = self.prob.sub_vars
+
+        # self.prob.sub_const = self.prob.mean_const[self.tim.stage_idx_col[1] :]
+
+        for v in self.prob.sub_vars:
+            self.prob.sub_model.addVar(
+                lb=v.getAttr("LB"),
+                ub=v.getAttr("UB"),
+                obj=v.getAttr("Obj"),
+                vtype=v.getAttr("VType"),
+                name=v.getAttr("VarName"),
+            )
+        self.prob.sub_model.update()
+        self.prob.sub_vars = self.prob.sub_model.getVars()
+
+        self.create_LSsub_constr(obs, incmb)
 
     # Create LSsub constraints
     def create_LSsub_constr(self, obs, incmbt):
@@ -146,49 +203,48 @@ class decompose:
             self.prob.sub_model.update()
         # self.prob.sub_const = self.prob.sub_model.getConstrs()
 
-    # Creating linear master with one surrogates (\eta)
-    def create_master(self):
-        self.prob.master_model = gb.Model("master_")
-        self.prob.master_vars = self.prob.mean_vars[: self.tim.stage_idx_col[1]]
+    def create_sub(self, obs, prob, iteration):
+        self.prob.sub_vars = self.prob.mean_vars
+        self.prob.sub_vars_fixed = self.prob.sub_vars
+        self.prob.sub_vars_s2 = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
 
-        # Create surrogate variables
-        for v in self.prob.master_vars:
+        self.prob.sub_var_s2_size = len(self.prob.sub_vars_s2)
+
+        for v in self.prob.sub_vars_s2:
             self.prob.master_model.addVar(
                 lb=v.getAttr("LB"),
                 ub=v.getAttr("UB"),
-                obj=v.getAttr("Obj"),
+                obj=prob * v.getAttr("Obj"),
                 vtype=v.getAttr("VType"),
-                name=v.getAttr("VarName"),
+                name=f"{v.getAttr('VarName')}_{iteration}",  # give the vars a new name
             )
 
         self.prob.master_model.update()
-        self.prob.master_vars = self.prob.master_model.getVars()
 
-        eta = self.prob.master_model.addVar(
-            lb=0.0, ub=gb.GRB.INFINITY, obj=1.0, vtype=gb.GRB.CONTINUOUS, name="\eta"
+        self.prob.sub_vars = self.prob.master_model.getVars()
+        self.prob.sub_vars = (
+            self.prob.sub_vars[: self.prob.master_var_size]
+            + self.prob.sub_vars[-self.prob.sub_var_s2_size :]
         )
-        self.prob.master_model.update()
-        self.prob.master_vars.append(eta)
+        self.prob.sub_vars_s2 = self.prob.sub_vars[-self.prob.sub_var_s2_size :]
 
-        self.create_master_constr()
+        self.create_sub_constr(obs, iteration)
 
-    # creating the Lshaped subproblem
-    def create_LSsub(self, obs, incmb):
-        self.prob.sub_model = gb.Model("sub_")
-        self.prob.sub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
-        self.prob.sub_vars_fixed = self.prob.sub_vars
+    # Create subproblem constraints
+    def create_sub_constr(self, obs, iteration):
+        constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
+        constr = self.replaceObs(obs, constr)
 
-        # self.prob.sub_const = self.prob.mean_const[self.tim.stage_idx_col[1] :]
+        for c in constr:
+            empt = gb.LinExpr()
+            for i, v in enumerate(self.prob.sub_vars):
+                w = self.prob.sub_vars_fixed[i]
+                empt += self.prob.mean_model.getCoeff(c, w) * v
 
-        for v in self.prob.sub_vars:
-            self.prob.sub_model.addVar(
-                lb=v.getAttr("LB"),
-                ub=v.getAttr("UB"),
-                obj=v.getAttr("Obj"),
-                vtype=v.getAttr("VType"),
-                name=v.getAttr("VarName"),
+            self.prob.master_model.addConstr(
+                empt,
+                c.getAttr("Sense"),
+                c.getAttr("RHS"),
+                name=f"{c.getAttr('ConstrName')}_{iteration}",
             )
-        self.prob.sub_model.update()
-        self.prob.sub_vars = self.prob.sub_model.getVars()
-
-        self.create_LSsub_constr(obs, incmb)
+            self.prob.master_model.update()

@@ -82,16 +82,19 @@ def main():
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
     sampling = False
+
+    # Set parameters for the case sampling = True
     iterations = 100
 
     d = decompose(f"{instance}", input_dir)
     d.find_stage_idx()
     T_mat = get_T_mat(d)
+    method = "L-shaped"
 
     # START of L-shaped method
-    # Create a function l_shaped(model, sampling, iterations, replication, T_mat)
+    # Create a function l_shaped(model, sampling, iterations, replication, T_mat, method = "L-shaped")
 
-    d.create_master()
+    d.create_master(method)
 
     # Optionally save file as 'master.lp' in output directory
     # os.makedirs(output_dir, exist_ok=True)
@@ -121,7 +124,7 @@ def main():
         h_vec_list.append(h_vec)
 
     while not convergence_criterion:
-        print("k=",k)
+        print("k=", k)
         # Step 1: Check if x is in K2
         # ToDo
 
