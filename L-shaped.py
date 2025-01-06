@@ -77,7 +77,7 @@ def add_optimality_cut(d, Beta, beta, eta, iteration):
 def main():
     start_main = time.time()
 
-    instance = "lands"
+    instance = "baa99"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
@@ -120,7 +120,7 @@ def main():
         h_vec_list.append(h_vec)
 
     while not convergence_criterion:
-        print("k:", k)
+        print("k=",k)
         # Step 1: Check if x is in K2
         # ToDo
 
@@ -174,7 +174,7 @@ def main():
             convergence_criterion = True
             print("Solution of first-stage variables:")
             for var, value in zip(d.prob.master_vars[:-1], x_opt):
-                print(f"    {var.varName}: {value:.2f}")
+                print(f"    {var.varName}= {value:.2f}")
             print(f"Objective Value: {round(master_obj_value, 2)}")
 
         else:
