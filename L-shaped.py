@@ -89,6 +89,7 @@ def main():
     T_mat = get_T_mat(d)
 
     # START of L-shaped method
+    # Create a function l_shaped(model, sampling, iterations, replication, T_mat)
 
     d.create_master()
 
