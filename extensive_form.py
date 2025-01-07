@@ -57,7 +57,7 @@ def extensive_form(
     replication=0,
     upper_bound=False,
     xhat=None,
-    method = "extensive_form"
+    method="extensive_form",
 ):
     rand_vars = RandVars(model.name)
     observations, probabilities = get_obs_probs(rand_vars, sampling, iterations)
@@ -149,7 +149,7 @@ def main():
             replication=0,
             upper_bound=False,
             xhat=None,
-            method="extensive_form"
+            method="extensive_form",
         )
 
         print(f"Objective Value: {obj_value:.2f}")
@@ -166,7 +166,13 @@ def main():
                 start_rep = time.time()
 
                 obj_value_SAA, first_stage_sol_SAA, up_bound = extensive_form(
-                    d, sampling, iterations, replication, upper_bound, xhat=None, method ="extensive_form"
+                    d,
+                    sampling,
+                    iterations,
+                    replication,
+                    upper_bound,
+                    xhat=None,
+                    method="extensive_form",
                 )
                 obj_val_SAA_list.append(obj_value_SAA)
                 first_stage_sol_SAA_list.append(first_stage_sol_SAA)
@@ -187,7 +193,7 @@ def main():
                 replication=0,
                 upper_bound=False,
                 xhat=None,
-                method="extensive_form"
+                method="extensive_form",
             )
             x_hat = list(x_hat.values())
 

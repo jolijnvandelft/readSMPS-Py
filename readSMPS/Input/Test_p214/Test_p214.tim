@@ -1,0 +1,5 @@
+TIME          Test_p214
+PERIODS       LP
+    X1        S2C1                     ROOT
+    Y1        S2C1                     STAGE-2
+ENDATA

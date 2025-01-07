@@ -63,21 +63,31 @@ def get_obs_probs(rvs, sampling=False, iterations=None):
     return observations, probabilities
 
 
-def add_optimality_cut(d, Beta, beta, eta, iteration):
+def add_optimality_cut(model, Beta, beta, eta, iteration):
     cut_expr = gb.LinExpr()
     cut_expr.addTerms(
-        Beta, d.prob.master_vars[:-1]
+        Beta, model.prob.master_vars[:-1]
     )  # Assuming the last variable is eta
     cut_expr.addTerms(1.0, eta)
 
     cut_name = f"optimality_cut_{iteration}"
-    d.prob.master_model.addLConstr(cut_expr, gb.GRB.GREATER_EQUAL, beta, cut_name)
+    model.prob.master_model.addLConstr(cut_expr, gb.GRB.GREATER_EQUAL, beta, cut_name)
+    print(f"Added optimality cut: {cut_expr} >= {beta}")
+
+
+def add_feasibility_cut(model, Gamma, gamma, iteration):
+    cut_expr = gb.LinExpr()
+    cut_expr.addTerms(Gamma, model.prob.master_vars[:-1])
+
+    cut_name = f"feasibility_cut_{iteration}"
+    model.prob.master_model.addLConstr(cut_expr, gb.GRB.GREATER_EQUAL, gamma, cut_name)
+    print(f"Added feasibility cut: {cut_expr} >= {gamma}")
 
 
 def main():
     start_main = time.time()
 
-    instance = "baa99"
+    instance = "Test_p214"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
@@ -92,19 +102,24 @@ def main():
     method = "L-shaped"
 
     # START of L-shaped method
-    # Create a function l_shaped(model, sampling, iterations, replication, T_mat, method = "L-shaped")
+    # Create a function l_shaped(model, sampling, iterations, T_mat, method = "L-shaped")
 
     d.create_master(method)
 
     # Optionally save file as 'master.lp' in output directory
-    # os.makedirs(output_dir, exist_ok=True)
-    # master_model = os.path.join(output_dir, "master_0.lp")
-    # d.prob.master_model.write(master_model)
+    os.makedirs(output_dir, exist_ok=True)
+    master_model = os.path.join(output_dir, "master_0.lp")
+    d.prob.master_model.write(master_model)
 
     d.prob.master_model.setParam("OutputFlag", 0)
     d.prob.master_model.optimize()
     cost_coeff = [var.getAttr("Obj") for var in d.prob.master_vars][:-1]
-    incmb = [var.X for var in d.prob.master_vars][:-1]
+
+    # Obtain first-stage solution of master problem or initilize with zeroes
+    if all(hasattr(var, "X") for var in d.prob.master_vars[:-1]):
+        incmb = [var.X for var in d.prob.master_vars[:-1]]
+    else:
+        incmb = [0] * (len(d.prob.master_vars) - 1)
 
     rand_vars = RandVars(d.name)
     observations, probabilities = get_obs_probs(rand_vars, sampling, iterations)
@@ -119,53 +134,78 @@ def main():
     incmb_zero = [0] * (len(d.prob.master_vars) - 1)
     h_vec_list = []
     for obs in observations:
-        d.create_LSsub(obs, incmb_zero)
+        d.create_LSsub(obs, incmb_zero, i=0)
         h_vec = np.array([const.RHS for const in d.prob.sub_model.getConstrs()])
         h_vec_list.append(h_vec)
 
     while not convergence_criterion:
         print("k=", k)
+
         # Step 1: Check if x is in K2
-        # ToDo
-
-        # Step 2: Compute an optimality cut
-        Beta = 0
-        beta = 0
-        up_bound_sum = 0
-
         for i, obs in enumerate(observations):
-            d.create_LSsub(obs, incmb)
-            d.prob.sub_model.setParam("OutputFlag", 0)
-            d.prob.sub_model.optimize()
-            obj_value = d.prob.sub_model.objVal
-            # sub_model = os.path.join(output_dir, f"sub_{i}.lp")
+            d.create_feas_sub(obs, incmb, i)
+            d.prob.feas_sub_model.setParam("OutputFlag", 0)
+            d.prob.feas_sub_model.optimize()
+            feas_obj_value = d.prob.feas_sub_model.objVal
+            feas_sub_model = os.path.join(output_dir, f"feas_sub_{i}.lp")
+            d.prob.feas_sub_model.write(feas_sub_model)
 
-            dual_mult = np.array(
-                d.prob.sub_model.getAttr("Pi", d.prob.sub_model.getConstrs())
-            )
-            h_vec = h_vec_list[i]
+            if feas_obj_value > 0:
+                sigma = np.array(
+                    d.prob.feas_sub_model.getAttr(
+                        "Pi", d.prob.feas_sub_model.getConstrs()
+                    )
+                )
+                h_vec = h_vec_list[i]
 
-            prob = probabilities[i]
-            Beta_sum = np.dot(dual_mult.T, T_mat)
-            beta_sum = np.dot(dual_mult.T, h_vec)
+                Gamma = np.dot(sigma.T, T_mat)
+                gamma = np.dot(sigma.T, h_vec)
 
-            Beta += prob * Beta_sum
-            beta += prob * beta_sum
-            up_bound_sum += prob * obj_value
+                add_feasibility_cut(d, Gamma, gamma, k)
+                # Break and skip to step 3
+                break
 
-        new_up_bound = np.dot(np.array(cost_coeff), np.array(incmb)) + up_bound_sum
+        else:
+            # Step 2: Compute an optimality cut
+            Beta = 0
+            beta = 0
+            up_bound_sum = 0
 
-        if new_up_bound <= up_bound:
-            up_bound = new_up_bound
-            x_opt = incmb
+            for i, obs in enumerate(observations):
+                d.create_LSsub(obs, incmb, i)
+                d.prob.sub_model.setParam("OutputFlag", 0)
+                d.prob.sub_model.optimize()
+                obj_value = d.prob.sub_model.objVal
+                # print("objective value", obj_value)
+                sub_model = os.path.join(output_dir, f"sub_{i}.lp")
+                d.prob.sub_model.write(sub_model)
 
-        eta_var = d.prob.master_vars[-1]
-        add_optimality_cut(d, Beta, beta, eta_var, k)
+                dual_mult = np.array(
+                    d.prob.sub_model.getAttr("Pi", d.prob.sub_model.getConstrs())
+                )
+                h_vec = h_vec_list[i]
+
+                prob = probabilities[i]
+                Beta_sum = np.dot(dual_mult.T, T_mat)
+                beta_sum = np.dot(dual_mult.T, h_vec)
+
+                Beta += prob * Beta_sum
+                beta += prob * beta_sum
+                up_bound_sum += prob * obj_value
+
+            new_up_bound = np.dot(np.array(cost_coeff), np.array(incmb)) + up_bound_sum
+
+            if new_up_bound <= up_bound:
+                up_bound = new_up_bound
+                x_opt = incmb
+
+            eta_var = d.prob.master_vars[-1]
+            add_optimality_cut(d, Beta, beta, eta_var, k)
 
         # Step 3: solve master program
         d.prob.master_model.optimize()
-        # master_model = os.path.join(output_dir, f"master_{k}.lp")
-        # d.prob.master_model.write(master_model)
+        master_model = os.path.join(output_dir, f"master_{k}.lp")
+        d.prob.master_model.write(master_model)
 
         incmb = [var.X for var in d.prob.master_vars][:-1]
         master_obj_value = d.prob.master_model.objVal
@@ -177,7 +217,7 @@ def main():
         if abs(up_bound - lo_bound) < epsilon:
             convergence_criterion = True
             print("Solution of first-stage variables:")
-            for var, value in zip(d.prob.master_vars[:-1], x_opt):
+            for var, value in zip(d.prob.master_vars, x_opt):
                 print(f"    {var.varName}= {value:.2f}")
             print(f"Objective Value: {round(master_obj_value, 2)}")
 

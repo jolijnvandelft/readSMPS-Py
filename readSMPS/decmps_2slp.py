@@ -136,8 +136,8 @@ class decompose:
 
         if method == "L-shaped":
             eta = self.prob.master_model.addVar(
-                lb=0.0,
-                ub=gb.GRB.INFINITY,
+                lb=-10e6,
+                ub=10e6,
                 obj=1.0,
                 vtype=gb.GRB.CONTINUOUS,
                 name="\eta",
@@ -158,50 +158,6 @@ class decompose:
                 empt, c.getAttr("Sense"), c.getAttr("RHS"), c.getAttr("ConstrName")
             )
             self.prob.master_model.update()
-        # self.prob.master_const = self.prob.master_model.getConstrs()
-
-    # creating the Lshaped subproblem
-    def create_LSsub(self, obs, incmb):
-        self.prob.sub_model = gb.Model("sub_")
-        self.prob.sub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
-        self.prob.sub_vars_fixed = self.prob.sub_vars
-
-        # self.prob.sub_const = self.prob.mean_const[self.tim.stage_idx_col[1] :]
-
-        for v in self.prob.sub_vars:
-            self.prob.sub_model.addVar(
-                lb=v.getAttr("LB"),
-                ub=v.getAttr("UB"),
-                obj=v.getAttr("Obj"),
-                vtype=v.getAttr("VType"),
-                name=v.getAttr("VarName"),
-            )
-        self.prob.sub_model.update()
-        self.prob.sub_vars = self.prob.sub_model.getVars()
-
-        self.create_LSsub_constr(obs, incmb)
-
-    # Create LSsub constraints
-    def create_LSsub_constr(self, obs, incmbt):
-        constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
-        constr = self.replaceObs(obs, constr)
-        for c in constr:
-            empt = gb.LinExpr()
-            Cx = 0
-            for i, v in enumerate(self.prob.sub_vars):
-                w = self.prob.sub_vars_fixed[i]
-                empt += self.prob.mean_model.getCoeff(c, w) * v
-            for v in range(len(self.prob.master_vars)):
-                if "eta" not in self.prob.master_vars[v].getAttr("VarName"):
-                    Cx += (
-                        self.prob.mean_model.getCoeff(c, self.prob.master_vars[v])
-                        * incmbt[v]
-                    )
-            self.prob.sub_model.addConstr(
-                empt, c.getAttr("Sense"), c.getAttr("RHS") - Cx, c.getAttr("ConstrName")
-            )
-            self.prob.sub_model.update()
-        # self.prob.sub_const = self.prob.sub_model.getConstrs()
 
     def create_sub(self, obs, prob, iteration):
         self.prob.sub_vars = self.prob.mean_vars
@@ -248,3 +204,114 @@ class decompose:
                 name=f"{c.getAttr('ConstrName')}_{iteration}",
             )
             self.prob.master_model.update()
+
+    # creating the Lshaped subproblem
+    def create_LSsub(self, obs, incmb, i):
+        self.prob.sub_model = gb.Model(f"sub_{i}")
+        self.prob.sub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
+        self.prob.sub_vars_fixed = self.prob.sub_vars
+
+        for v in self.prob.sub_vars:
+            self.prob.sub_model.addVar(
+                lb=v.getAttr("LB"),
+                ub=v.getAttr("UB"),
+                obj=v.getAttr("Obj"),
+                vtype=v.getAttr("VType"),
+                name=v.getAttr("VarName"),
+            )
+        self.prob.sub_model.update()
+        self.prob.sub_vars = self.prob.sub_model.getVars()
+
+        self.create_LSsub_constr(obs, incmb)
+
+    # Create LSsub constraints
+    def create_LSsub_constr(self, obs, incmbt):
+        constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
+        constr = self.replaceObs(obs, constr)
+        for c in constr:
+            empt = gb.LinExpr()
+            Cx = 0
+            for i, v in enumerate(self.prob.sub_vars):
+                w = self.prob.sub_vars_fixed[i]
+                empt += self.prob.mean_model.getCoeff(c, w) * v
+            for v in range(len(self.prob.master_vars)):
+                if "eta" not in self.prob.master_vars[v].getAttr("VarName"):
+                    Cx += (
+                        self.prob.mean_model.getCoeff(c, self.prob.master_vars[v])
+                        * incmbt[v]
+                    )
+            self.prob.sub_model.addConstr(
+                empt, c.getAttr("Sense"), c.getAttr("RHS") - Cx, c.getAttr("ConstrName")
+            )
+            self.prob.sub_model.update()
+        # self.prob.sub_const = self.prob.sub_model.getConstrs()
+
+    def create_feas_sub(self, obs, incmb, i):
+        self.prob.feas_sub_model = gb.Model(f"feas_sub_{i}")
+        self.prob.feas_sub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
+        self.prob.feas_sub_vars_fixed = self.prob.feas_sub_vars
+
+        for v in self.prob.feas_sub_vars:
+            self.prob.feas_sub_model.addVar(
+                lb=v.getAttr("LB"),
+                ub=v.getAttr("UB"),
+                obj=0,
+                vtype=v.getAttr("VType"),
+                name=v.getAttr("VarName"),
+            )
+
+        # Add as many variables as there are second-stage constraints
+        K = len(self.prob.mean_const[self.tim.stage_idx_row[1] :])
+
+        # Add variables vplus0, ..., vplusK
+        for k in range(K):
+            var_name = f"vplus{k}"
+            self.prob.feas_sub_model.addVar(
+                lb=0,
+                ub=gb.GRB.INFINITY,
+                obj=1,
+                vtype=gb.GRB.CONTINUOUS,
+                name=var_name,
+            )
+
+        # Add variables vminus0, ..., vplusK
+        for k in range(K):
+            var_name = f"vminus{k}"
+            self.prob.feas_sub_model.addVar(
+                lb=0,
+                ub=gb.GRB.INFINITY,
+                obj=1,
+                vtype=gb.GRB.CONTINUOUS,
+                name=var_name,
+            )
+
+        self.prob.feas_sub_model.update()
+        self.prob.feas_sub_vars = self.prob.feas_sub_model.getVars()
+
+        self.create_feas_sub_constr(obs, incmb)
+
+    def create_feas_sub_constr(self, obs, incmbt):
+        constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
+        constr = self.replaceObs(obs, constr)
+        K = len(constr)
+        for k, c in enumerate(constr):
+            empt = gb.LinExpr()
+            Cx = 0
+            index_range = len(self.prob.feas_sub_vars) - 2 * K
+            for i, v in enumerate(self.prob.feas_sub_vars[:index_range]):
+                w = self.prob.feas_sub_vars_fixed[i]
+                empt += self.prob.mean_model.getCoeff(c, w) * v
+
+            empt += self.prob.feas_sub_model.getVarByName(f"vplus{k}")
+            empt -= self.prob.feas_sub_model.getVarByName(f"vminus{k}")
+            for v in range(len(self.prob.master_vars)):
+                if "eta" not in self.prob.master_vars[v].getAttr("VarName"):
+                    Cx += (
+                        self.prob.mean_model.getCoeff(c, self.prob.master_vars[v])
+                        * incmbt[v]
+                    )
+            self.prob.feas_sub_model.addConstr(
+                empt, c.getAttr("Sense"), c.getAttr("RHS") - Cx, c.getAttr("ConstrName")
+            )
+
+            self.prob.feas_sub_model.update()
