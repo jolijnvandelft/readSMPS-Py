@@ -5,7 +5,7 @@ Created on May 4 - 2019
 ---Based on the 2-stage stochastic program structure
 ---Assumption: RHS is random
 ---decompose the 2slp problem into a master and subproblems
----save the distributoin of the random variables and return the
+---save the distribution of the random variables and return the
 ---random variables
 
 @author: Siavash Tabrizian - stabrizian@smu.edu
@@ -120,6 +120,7 @@ class decompose:
 
         self.prob.master_vars = self.prob.mean_vars[: self.tim.stage_idx_col[1]]
         self.prob.master_var_size = len(self.prob.master_vars)
+        print("The number of first-stage variables equals:", self.prob.master_var_size)
 
         # Create surrogate variables
         for v in self.prob.master_vars:
@@ -158,6 +159,7 @@ class decompose:
                 empt, c.getAttr("Sense"), c.getAttr("RHS"), c.getAttr("ConstrName")
             )
             self.prob.master_model.update()
+        print("The number of first-stage constraints equals:", len(constr))
 
     def create_sub(self, obs, prob, iteration):
         self.prob.sub_vars = self.prob.mean_vars
@@ -206,8 +208,8 @@ class decompose:
             self.prob.master_model.update()
 
     # creating the Lshaped subproblem
-    def create_LSsub(self, obs, incmb, i):
-        self.prob.sub_model = gb.Model(f"sub_{i}")
+    def create_LSsub(self, obs, incmb, iteration):
+        self.prob.sub_model = gb.Model(f"sub_{iteration}")
         self.prob.sub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
         self.prob.sub_vars_fixed = self.prob.sub_vars
 
@@ -244,10 +246,9 @@ class decompose:
                 empt, c.getAttr("Sense"), c.getAttr("RHS") - Cx, c.getAttr("ConstrName")
             )
             self.prob.sub_model.update()
-        # self.prob.sub_const = self.prob.sub_model.getConstrs()
 
-    def create_feas_sub(self, obs, incmb, i):
-        self.prob.feas_sub_model = gb.Model(f"feas_sub_{i}")
+    def create_feas_sub(self, obs, incmb, iteration):
+        self.prob.feas_sub_model = gb.Model(f"feas_sub_{iteration}")
         self.prob.feas_sub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
         self.prob.feas_sub_vars_fixed = self.prob.feas_sub_vars
 
@@ -290,7 +291,7 @@ class decompose:
 
         self.create_feas_sub_constr(obs, incmb)
 
-    def create_feas_sub_constr(self, obs, incmbt):
+    def create_feas_sub_constr(self, obs, incmb):
         constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
         constr = self.replaceObs(obs, constr)
         K = len(constr)
@@ -308,7 +309,7 @@ class decompose:
                 if "eta" not in self.prob.master_vars[v].getAttr("VarName"):
                     Cx += (
                         self.prob.mean_model.getCoeff(c, self.prob.master_vars[v])
-                        * incmbt[v]
+                        * incmb[v]
                     )
             self.prob.feas_sub_model.addConstr(
                 empt, c.getAttr("Sense"), c.getAttr("RHS") - Cx, c.getAttr("ConstrName")

@@ -19,12 +19,13 @@ from readSMPS.decmps_2slp import decompose
 
 
 def get_obs_probs(rvs, sampling=False, iterations=None):
+    print("The number of random variables equals:", rvs.rvnum)
     if not sampling:
         # After processing the stochastic data, compute observations and probabilities
-        rand_vars_values = [list(rvs.dist[i].keys()) for i in range(len(rvs.rv))]
+        rand_vars_values = [list(rvs.dist[i].keys()) for i in range(rvs.rvnum)]
         observations = list(itertools.product(*rand_vars_values))
 
-        rand_vars_probs = [list(rvs.dist[i].values()) for i in range(len(rvs.rv))]
+        rand_vars_probs = [list(rvs.dist[i].values()) for i in range(rvs.rvnum)]
         combinations = itertools.product(*rand_vars_probs)
         probabilities = [np.prod(combination) for combination in combinations]
 
@@ -79,7 +80,7 @@ def extensive_form(
             prob = probabilities[iteration - 1]
             model.create_sub(obs, prob, iteration)
 
-            model.create_LSsub(obs, xhat)
+            model.create_LSsub(obs, xhat, iteration)
             model.prob.sub_model.setParam("OutputFlag", 0)
             model.prob.sub_model.optimize()
             recourse_val = model.prob.sub_model.objVal
@@ -106,6 +107,9 @@ def extensive_form(
 def confidence_interval(value_list, alpha=0.05):
     M = len(value_list)
 
+    if M == 1:
+        return value_list[0], None
+
     mean = sum(value_list) / len(value_list)
     diff = [(v - mean) for v in value_list]
     sum_sqr_diff = sum([d**2 for d in diff])
@@ -126,16 +130,16 @@ def confidence_interval(value_list, alpha=0.05):
 def main():
     start_main = time.time()
 
-    instance = "pgp2"
+    instance = "lands3"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
     sampling = True
 
     # Set parameters for the case sampling = True
-    iterations = 50
-    replications = 100
-    upper_bound = True
+    iterations = 200
+    replications = 10
+    upper_bound = False
 
     d = decompose(f"{instance}", input_dir)
     d.find_stage_idx()
@@ -179,7 +183,7 @@ def main():
 
                 end_rep = time.time()
                 rep_time = end_rep - start_rep
-                if replication % 50 == 0:
+                if replication % 1 == 0:
                     print(
                         f"Replication {replication} completed in {rep_time:.2f} seconds."
                     )
@@ -210,37 +214,42 @@ def main():
 
                 end_rep = time.time()
                 rep_time = end_rep - start_rep
-                if replication % 50 == 0:
+                if replication % 1 == 0:
                     print(
                         f"Replication {replication} completed in {rep_time:.2f} seconds."
                     )
 
             up_bound, up_bound_conf_interval = confidence_interval(up_bound_list)
             print(f"Upper Bound Estimate: {up_bound:.2f}")
-            print(
-                f"  Confidence Interval: [{up_bound_conf_interval[0]:.2f}, {up_bound_conf_interval[1]:.2f}]"
-            )
+            if up_bound_conf_interval is not None:
+                print(
+                    f"  Confidence Interval: [{up_bound_conf_interval[0]:.2f}, {up_bound_conf_interval[1]:.2f}]"
+                )
+            else:
+                print("  Confidence Interval: None")
 
         lo_bound, lo_bound_conf_interval = confidence_interval(obj_val_SAA_list)
 
         print(f"Lower Bound Estimate: {lo_bound:.2f}")
-        print(
-            f"  Confidence Interval: [{lo_bound_conf_interval[0]:.2f}, {lo_bound_conf_interval[1]:.2f}]"
-        )
+        if lo_bound_conf_interval is not None:
+            print(
+                f"  Confidence Interval: [{lo_bound_conf_interval[0]:.2f}, {lo_bound_conf_interval[1]:.2f}]"
+            )
+        else:
+            print("  Confidence Interval: None")
 
         averages = {}
-        for key in first_stage_sol_SAA_list[
+        for first_stage_sol_SAA in first_stage_sol_SAA_list[
             0
-        ].keys():  # Loop through the keys in the first dictionary
-            # Calculate the average value for this key across all replications
-            avg_value = sum(rep[key] for rep in first_stage_sol_SAA_list) / len(
+        ].keys():
+            avg_value = sum(rep[first_stage_sol_SAA] for rep in first_stage_sol_SAA_list) / len(
                 first_stage_sol_SAA_list
             )
-            averages[key] = avg_value
+            averages[first_stage_sol_SAA] = avg_value
 
         print("Average first-stage solution:")
-        for key, avg in averages.items():
-            print(f"  {key}: {avg:.2f}")
+        for first_stage_sol_SAA, avg in averages.items():
+            print(f"  {first_stage_sol_SAA}: {avg:.2f}")
 
     end_main = time.time()  # Record the end time
     total_time = end_main - start_main  # Calculate the elapsed time

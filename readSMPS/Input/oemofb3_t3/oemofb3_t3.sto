@@ -1,0 +1,21 @@
+STOCH	oemofb3_t3
+INDEP	DISCRETE
+RHS	c_e_BusBlock_balance(BB_electricity_0_0)_	3653.4528731365453	0.33
+RHS	c_e_BusBlock_balance(BB_electricity_0_0)_	3806.1154334889115	0.33
+RHS	c_e_BusBlock_balance(BB_electricity_0_0)_	3958.7779938412777	0.34
+RHS	c_e_BusBlock_balance(BB_electricity_0_1)_	3145.598881135836	0.33
+RHS	c_e_BusBlock_balance(BB_electricity_0_1)_	3296.249937572325	0.33
+RHS	c_e_BusBlock_balance(BB_electricity_0_1)_	3446.9009940088135	0.34
+RHS	c_e_BusBlock_balance(BB_electricity_0_2)_	2967.3494187926863	0.33
+RHS	c_e_BusBlock_balance(BB_electricity_0_2)_	3110.695539955726	0.33
+RHS	c_e_BusBlock_balance(BB_electricity_0_2)_	3254.041661118766	0.34
+RHS	c_e_BusBlock_balance(B_electricity_0_0)_	863.8231126213357	0.33
+RHS	c_e_BusBlock_balance(B_electricity_0_0)_	931.3531447589269	0.33
+RHS	c_e_BusBlock_balance(B_electricity_0_0)_	998.8831768965181	0.34
+RHS	c_e_BusBlock_balance(B_electricity_0_1)_	847.0363803207014	0.33
+RHS	c_e_BusBlock_balance(B_electricity_0_1)_	913.6766270140384	0.33
+RHS	c_e_BusBlock_balance(B_electricity_0_1)_	980.3168737073756	0.34
+RHS	c_e_BusBlock_balance(B_electricity_0_2)_	811.21454421599		0.33
+RHS	c_e_BusBlock_balance(B_electricity_0_2)_	874.6234648222995	0.33
+RHS	c_e_BusBlock_balance(B_electricity_0_2)_	938.0323854286091	0.34
+ENDDATA

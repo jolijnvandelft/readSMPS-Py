@@ -1,0 +1,5 @@
+TIME          oemofb3_t3
+PERIODS       LP
+   GenericInvestmentStorageBlock_invest(B_electricity_liion_battery_0)	OBJ							ROOT
+   flow(BB_electricity_BB_electricity_liion_battery_0_0)		c_u_integral_limit_emission_factor_constraint_		STAGE-2
+ENDATA
