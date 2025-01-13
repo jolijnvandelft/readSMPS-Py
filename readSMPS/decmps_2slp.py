@@ -95,6 +95,7 @@ class decompose:
                 tmp = self.prob.mean_const.index(emp[0])
             # add the init and end index of the column of stage i
             self.tim.stage_idx_row.append(tmp)
+        self.mean_model_constr = self.prob.mean_const[self.tim.stage_idx_row[1]:]
 
     # replace the observations in the proper location of the problem
     def replaceObs(self, obs, constr):
@@ -134,6 +135,7 @@ class decompose:
 
         self.prob.master_model.update()
         self.prob.master_vars = self.prob.master_model.getVars()
+        self.prob.relevant_master_vars = self.prob.master_model.getVars()
 
         if method == "L-shaped":
             eta = self.prob.master_model.addVar(
@@ -224,12 +226,13 @@ class decompose:
         self.prob.sub_model.update()
         self.prob.sub_vars = self.prob.sub_model.getVars()
 
-        self.create_LSsub_constr(obs, incmb)
+        return self.create_LSsub_constr(obs, incmb)
 
     # Create LSsub constraints
     def create_LSsub_constr(self, obs, incmbt):
         constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
         constr = self.replaceObs(obs, constr)
+        sub_constr = []
         for c in constr:
             empt = gb.LinExpr()
             Cx = 0
@@ -242,10 +245,24 @@ class decompose:
                         self.prob.mean_model.getCoeff(c, self.prob.master_vars[v])
                         * incmbt[v]
                     )
-            self.prob.sub_model.addConstr(
+            sub_constr.append(self.prob.sub_model.addConstr(
                 empt, c.getAttr("Sense"), c.getAttr("RHS") - Cx, c.getAttr("ConstrName")
-            )
+            ))
             self.prob.sub_model.update()
+        return sub_constr
+            
+    def change_sub(self, obs, incmb, iteration, feas_sub_constr, feas_sub_constr_obs_indices):
+        obscounter = 0
+        for i in range(len(feas_sub_constr)):
+            rhs = 0.0
+            if i in feas_sub_constr_obs_indices:  #feas_sub_constr[i].getAttr("ConstrName") in self.RV.rv:
+                rhs = obs[obscounter]
+                obscounter += 1
+            else:
+                rhs = self.mean_model_constr[i].getAttr("RHS")
+            for (j, v) in enumerate(self.prob.relevant_master_vars):
+                rhs -= self.prob.mean_model.getCoeff(self.mean_model_constr[i], v) * incmb[j]
+            feas_sub_constr[i].setAttr("RHS", rhs)
 
     def create_feas_sub(self, obs, incmb, iteration):
         self.prob.feas_sub_model = gb.Model(f"feas_sub_{iteration}")
@@ -289,11 +306,13 @@ class decompose:
         self.prob.feas_sub_model.update()
         self.prob.feas_sub_vars = self.prob.feas_sub_model.getVars()
 
-        self.create_feas_sub_constr(obs, incmb)
+        return self.create_feas_sub_constr(obs, incmb)
+
 
     def create_feas_sub_constr(self, obs, incmb):
         constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
         constr = self.replaceObs(obs, constr)
+        feas_sub_constr = []
         K = len(constr)
         for k, c in enumerate(constr):
             empt = gb.LinExpr()
@@ -311,8 +330,10 @@ class decompose:
                         self.prob.mean_model.getCoeff(c, self.prob.master_vars[v])
                         * incmb[v]
                     )
-            self.prob.feas_sub_model.addConstr(
+            feas_sub_constr.append(self.prob.feas_sub_model.addConstr(
                 empt, c.getAttr("Sense"), c.getAttr("RHS") - Cx, c.getAttr("ConstrName")
-            )
+            ))
 
             self.prob.feas_sub_model.update()
+        
+        return feas_sub_constr

@@ -8,7 +8,7 @@ import random
 from scipy.stats import norm
 
 # Get the directory containing readSMPS
-readsmps_dir = "/Users/jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS"
+readsmps_dir = "readSMPS"
 
 # Add it to sys.path
 if readsmps_dir not in sys.path:
@@ -131,14 +131,14 @@ def main():
     start_main = time.time()
 
     instance = "lands3"
-    input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
-    output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
+    input_dir = "readSMPS/Input/"
+    output_dir = f"readSMPS/Output/{instance}"
 
     sampling = True
 
     # Set parameters for the case sampling = True
     iterations = 200
-    replications = 10
+    replications = 1
     upper_bound = False
 
     d = decompose(f"{instance}", input_dir)

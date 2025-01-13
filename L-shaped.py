@@ -9,7 +9,7 @@ import random
 from scipy.stats import norm
 
 # Get the directory containing readSMPS
-readsmps_dir = "/Users/jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS"
+readsmps_dir = "readSMPS"
 
 # Add it to sys.path
 if readsmps_dir not in sys.path:
@@ -87,7 +87,7 @@ def add_feasibility_cut(model, Gamma, gamma, iteration):
 
 
 def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
-    output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
+    output_dir = f"readSMPS/Output/{instance}"
 
     model.create_master(method)
 
@@ -120,17 +120,24 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
     # Create list of h_vec (for incmb is the zero solution)
     incmb_zero = [0] * (len(model.prob.master_vars) - 1)
     h_vec_list = []
+    
+    feas_sub_constr = model.create_feas_sub(observations[0], incmb, 0)
+    feas_sub_constr_obs_indices = [i for (i, constr) in enumerate(feas_sub_constr) if feas_sub_constr[i].getAttr("ConstrName") in model.RV.rv]
+    
     for obs in observations:
         model.create_LSsub(obs, incmb_zero, iteration=0)
         h_vec = np.array([const.RHS for const in model.prob.sub_model.getConstrs()])
         h_vec_list.append(h_vec)
+        
+    sub_constr = model.create_LSsub(observations[0], incmb_zero, iteration=0)
+    sub_constr_obs_indices = [i for (i, constr) in enumerate(sub_constr) if feas_sub_constr[i].getAttr("ConstrName") in model.RV.rv]
 
     while not convergence_criterion:
         print("nu=", nu)
 
         # Step 1: Check if x is in K2
         for i, obs in enumerate(observations):
-            model.create_feas_sub(obs, incmb, i)
+            model.change_sub(obs, incmb, i, feas_sub_constr, feas_sub_constr_obs_indices)
             model.prob.feas_sub_model.setParam("OutputFlag", 0)
             model.prob.feas_sub_model.optimize()
             feas_obj_value = model.prob.feas_sub_model.objVal
@@ -159,7 +166,8 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
             up_bound_sum = 0
 
             for i, obs in enumerate(observations):
-                model.create_LSsub(obs, incmb, i)
+                #model.create_LSsub(obs, incmb, i)
+                model.change_sub(obs, incmb, i, sub_constr, sub_constr_obs_indices)
                 model.prob.sub_model.setParam("OutputFlag", 0)
                 model.prob.sub_model.optimize()
                 obj_value = model.prob.sub_model.objVal
@@ -217,9 +225,9 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
 def main():
     start_main = time.time()
 
-    instance = "Test_p214"
-    input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
-    output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
+    instance = "pgp2"
+    input_dir = "readSMPS/Input/"
+    output_dir = f"readSMPS/Output/{instance}"
 
     sampling = False
 
