@@ -66,7 +66,9 @@ def extensive_form(
     observations, probabilities = get_obs_probs(rand_vars, sampling, iterations)
     end_get_obs_probs = time.time()
     elapsed_get_obs_probs = end_get_obs_probs - start_get_obs_probs
-    print(f"Time taken to enumerate over all random variables: {elapsed_get_obs_probs:.6f} seconds.")
+    print(
+        f"Time taken to enumerate over all random variables: {elapsed_get_obs_probs:.6f} seconds."
+    )
 
     model.create_master(method)
 
@@ -244,12 +246,10 @@ def main():
             print("  Confidence Interval: None")
 
         averages = {}
-        for first_stage_sol_SAA in first_stage_sol_SAA_list[
-            0
-        ].keys():
-            avg_value = sum(rep[first_stage_sol_SAA] for rep in first_stage_sol_SAA_list) / len(
-                first_stage_sol_SAA_list
-            )
+        for first_stage_sol_SAA in first_stage_sol_SAA_list[0].keys():
+            avg_value = sum(
+                rep[first_stage_sol_SAA] for rep in first_stage_sol_SAA_list
+            ) / len(first_stage_sol_SAA_list)
             averages[first_stage_sol_SAA] = avg_value
 
         print("Average first-stage solution:")
