@@ -61,7 +61,12 @@ def extensive_form(
     method="extensive_form",
 ):
     rand_vars = RandVars(model.name)
+
+    start_get_obs_probs = time.time()
     observations, probabilities = get_obs_probs(rand_vars, sampling, iterations)
+    end_get_obs_probs = time.time()
+    elapsed_get_obs_probs = end_get_obs_probs - start_get_obs_probs
+    print(f"Time taken to enumerate over all random variables: {elapsed_get_obs_probs:.6f} seconds.")
 
     model.create_master(method)
 
@@ -80,7 +85,7 @@ def extensive_form(
             prob = probabilities[iteration - 1]
             model.create_sub(obs, prob, iteration)
 
-            model.create_LSsub(obs, xhat, iteration)
+            model.create_sub(obs, xhat, iteration)
             model.prob.sub_model.setParam("OutputFlag", 0)
             model.prob.sub_model.optimize()
             recourse_val = model.prob.sub_model.objVal
@@ -134,11 +139,11 @@ def main():
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
-    sampling = True
+    sampling = False
 
     # Set parameters for the case sampling = True
     iterations = 200
-    replications = 10
+    replications = 1
     upper_bound = False
 
     d = decompose(f"{instance}", input_dir)

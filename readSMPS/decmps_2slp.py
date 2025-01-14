@@ -209,20 +209,20 @@ class decompose:
 
     # creating the Lshaped subproblem
     def create_LSsub(self, obs, incmb, iteration):
-        self.prob.sub_model = gb.Model(f"sub_{iteration}")
-        self.prob.sub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
-        self.prob.sub_vars_fixed = self.prob.sub_vars
+        self.prob.LSsub_model = gb.Model(f"LSsub_{iteration}")
+        self.prob.LSsub_vars = self.prob.mean_vars[self.tim.stage_idx_col[1] :]
+        self.prob.LSsub_vars_fixed = self.prob.LSsub_vars
 
-        for v in self.prob.sub_vars:
-            self.prob.sub_model.addVar(
+        for v in self.prob.LSsub_vars:
+            self.prob.LSsub_model.addVar(
                 lb=v.getAttr("LB"),
                 ub=v.getAttr("UB"),
                 obj=v.getAttr("Obj"),
                 vtype=v.getAttr("VType"),
                 name=v.getAttr("VarName"),
             )
-        self.prob.sub_model.update()
-        self.prob.sub_vars = self.prob.sub_model.getVars()
+        self.prob.LSsub_model.update()
+        self.prob.LSsub_vars = self.prob.LSsub_model.getVars()
 
         self.create_LSsub_constr(obs, incmb)
 
@@ -233,8 +233,8 @@ class decompose:
         for c in constr:
             empt = gb.LinExpr()
             Cx = 0
-            for i, v in enumerate(self.prob.sub_vars):
-                w = self.prob.sub_vars_fixed[i]
+            for i, v in enumerate(self.prob.LSsub_vars):
+                w = self.prob.LSsub_vars_fixed[i]
                 empt += self.prob.mean_model.getCoeff(c, w) * v
             for v in range(len(self.prob.master_vars)):
                 if "eta" not in self.prob.master_vars[v].getAttr("VarName"):
@@ -242,10 +242,10 @@ class decompose:
                         self.prob.mean_model.getCoeff(c, self.prob.master_vars[v])
                         * incmbt[v]
                     )
-            self.prob.sub_model.addConstr(
+            self.prob.LSsub_model.addConstr(
                 empt, c.getAttr("Sense"), c.getAttr("RHS") - Cx, c.getAttr("ConstrName")
             )
-            self.prob.sub_model.update()
+            self.prob.LSsub_model.update()
 
     def create_feas_sub(self, obs, incmb, iteration):
         self.prob.feas_sub_model = gb.Model(f"feas_sub_{iteration}")

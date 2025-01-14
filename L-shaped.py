@@ -89,7 +89,11 @@ def add_feasibility_cut(model, Gamma, gamma, iteration):
 def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
+    start_create_master = time.time()
     model.create_master(method)
+    end_create_master = time.time()
+    elapsed_create_master = end_create_master - start_create_master
+    print(f"Time taken to create the master model: {elapsed_create_master:.6f} seconds.")
 
     # Optionally save file as 'master.lp' in output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -106,10 +110,13 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
     else:
         incmb = [0] * (len(model.prob.master_vars) - 1)
 
-    print("First solution for x is", incmb)
-
     rand_vars = RandVars(model.name)
+
+    start_get_obs_probs = time.time()
     observations, probabilities = get_obs_probs(rand_vars, sampling, iterations)
+    end_get_obs_probs = time.time()
+    elapsed_get_obs_probs = end_get_obs_probs - start_get_obs_probs
+    print(f"Time taken to enumerate over all random variables: {elapsed_get_obs_probs:.6f} seconds.")
 
     convergence_criterion = False
     nu = 1
@@ -122,65 +129,74 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
     h_vec_list = []
     for obs in observations:
         model.create_LSsub(obs, incmb_zero, iteration=0)
-        h_vec = np.array([const.RHS for const in model.prob.sub_model.getConstrs()])
+        h_vec = np.array([const.RHS for const in model.prob.LSsub_model.getConstrs()])
         h_vec_list.append(h_vec)
 
+    # Start of the algorithm
     while not convergence_criterion:
         print("nu=", nu)
+        Beta = 0
+        beta = 0
+        up_bound_sum = 0
+        skip_up_bound_computation = False
 
-        # Step 1: Check if x is in K2
+        # Step 1: Solve subproblems and generate cut
         for i, obs in enumerate(observations):
-            model.create_feas_sub(obs, incmb, i)
-            model.prob.feas_sub_model.setParam("OutputFlag", 0)
-            model.prob.feas_sub_model.optimize()
-            feas_obj_value = model.prob.feas_sub_model.objVal
-            feas_sub_model = os.path.join(output_dir, f"feas_sub_{i}.lp")
-            model.prob.feas_sub_model.write(feas_sub_model)
+            model.create_LSsub(obs, incmb, i)
+            model.prob.LSsub_model.setParam("OutputFlag", 0)
+            model.prob.LSsub_model.optimize()
 
-            if feas_obj_value > 0:
+            if model.prob.LSsub_model.status == 4:
+                # Subproblem is infeasible. Create feasibility cut.
+                model.create_feas_sub(obs, incmb, i)
+                model.prob.feas_sub_model.setParam("OutputFlag",0)
+                model.prob.feas_sub_model.optimize()
+                feas_obj_value = model.prob.feas_sub_model.objVal
+
+                print("feas_obj_value", feas_obj_value)
+
+                # feas_sub_model = os.path.join(output_dir, f"feas_sub_{i}.lp")
+                # model.prob.feas_sub_model.write(feas_sub_model)
+
                 sigma = np.array(
                     model.prob.feas_sub_model.getAttr(
                         "Pi", model.prob.feas_sub_model.getConstrs()
                     )
                 )
+
                 h_vec = h_vec_list[i]
 
                 Gamma = np.dot(sigma.T, T_mat)
                 gamma = np.dot(sigma.T, h_vec)
 
                 add_feasibility_cut(model, Gamma, gamma, nu)
+
                 # Break and skip to step 3
+                skip_up_bound_computation = True
                 break
 
-        else:
             # Step 2: Compute an optimality cut
-            Beta = 0
-            beta = 0
-            up_bound_sum = 0
+            obj_value = model.prob.LSsub_model.objVal
+            # LSsub_model = os.path.join(output_dir, f"LSsub_{i}.lp")
+            # model.prob.sub_model.write(LSsub_model)
 
-            for i, obs in enumerate(observations):
-                model.create_LSsub(obs, incmb, i)
-                model.prob.sub_model.setParam("OutputFlag", 0)
-                model.prob.sub_model.optimize()
-                obj_value = model.prob.sub_model.objVal
-                # sub_model = os.path.join(output_dir, f"sub_{i}.lp")
-                # model.prob.sub_model.write(sub_model)
-
-                dual_mult = np.array(
-                    model.prob.sub_model.getAttr(
-                        "Pi", model.prob.sub_model.getConstrs()
-                    )
+            dual_mult = np.array(
+                model.prob.LSsub_model.getAttr(
+                    "Pi", model.prob.LSsub_model.getConstrs()
                 )
-                h_vec = h_vec_list[i]
+            )
+            
+            h_vec = h_vec_list[i]
 
-                prob = probabilities[i]
-                Beta_sum = np.dot(dual_mult.T, T_mat)
-                beta_sum = np.dot(dual_mult.T, h_vec)
+            prob = probabilities[i]
+            Beta_sum = np.dot(dual_mult.T, T_mat)
+            beta_sum = np.dot(dual_mult.T, h_vec)
 
-                Beta += prob * Beta_sum
-                beta += prob * beta_sum
-                up_bound_sum += prob * obj_value
+            Beta += prob * Beta_sum
+            beta += prob * beta_sum
+            up_bound_sum += prob * obj_value
 
+        if not skip_up_bound_computation:
             new_up_bound = np.dot(np.array(cost_coeff), np.array(incmb)) + up_bound_sum
 
             if new_up_bound <= up_bound:
@@ -189,11 +205,13 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
 
             eta_var = model.prob.master_vars[-1]
             add_optimality_cut(model, Beta, beta, eta_var, nu)
-
+    
         # Step 3: solve master program
+        start_step_3 = time.time()
+
         model.prob.master_model.optimize()
-        master_model = os.path.join(output_dir, f"master_{nu}.lp")
-        model.prob.master_model.write(master_model)
+        # master_model = os.path.join(output_dir, f"master_{nu}.lp")
+        # model.prob.master_model.write(master_model)
 
         incmb = [var.X for var in model.prob.master_vars][:-1]
         master_obj_value = model.prob.master_model.objVal
@@ -201,6 +219,10 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
         new_lo_bound = master_obj_value
         if new_lo_bound >= lo_bound:
             lo_bound = new_lo_bound
+
+        end_step_3 = time.time()
+        elapsed_step_3 = end_step_3 - start_step_3
+        # print(f"Time taken to execute step 3 of the L-shaped method: {elapsed_step_3:.6f} seconds.")
 
         # Step 4: termination
         if abs(up_bound - lo_bound) < abs(epsilon * up_bound):
@@ -217,7 +239,7 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
 def main():
     start_main = time.time()
 
-    instance = "Test_p214"
+    instance = "pgp2"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
@@ -228,7 +250,12 @@ def main():
 
     d = decompose(f"{instance}", input_dir)
     d.find_stage_idx()
+    start_T_mat = time.time()
     T_mat = get_T_mat(d)
+    end_T_mat = time.time()
+    elapsed_T_mat = end_T_mat - start_T_mat
+    print(f"Time taken to create T_mat: {elapsed_T_mat:.6f} seconds.")
+
     method = "L-shaped"
 
     l_shaped(d, sampling, iterations, T_mat, instance, method="L-shaped")
