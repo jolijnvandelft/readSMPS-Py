@@ -229,7 +229,7 @@ class decompose:
         return self.create_LSsub_constr(obs, incmb)
 
     # Create LSsub constraints
-    def create_LSsub_constr(self, obs, incmbt):
+    def create_LSsub_constr(self, obs, incmb):
         constr = self.prob.mean_const[self.tim.stage_idx_row[1] :]
         constr = self.replaceObs(obs, constr)
         LSsub_constr = []
@@ -243,7 +243,7 @@ class decompose:
                 if "eta" not in self.prob.master_vars[v].getAttr("VarName"):
                     Cx += (
                         self.prob.mean_model.getCoeff(c, self.prob.master_vars[v])
-                        * incmbt[v]
+                        * incmb[v]
                     )
             LSsub_constr.append(
                 self.prob.LSsub_model.addConstr(
@@ -263,9 +263,7 @@ class decompose:
         obscounter = 0
         for i in range(len(LSsub_constr)):
             rhs = 0.0
-            if (
-                i in LSsub_constr_obs_indices
-            ):  # sub_constr[i].getAttr("ConstrName") in self.RV.rv
+            if i in LSsub_constr_obs_indices:
                 rhs = obs[obscounter]
                 obscounter += 1
             else:

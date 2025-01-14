@@ -73,9 +73,16 @@ def extensive_form(
     model.create_master(method)
 
     if not upper_bound:
+        start_create_ef = time.time()
+
         for iteration, obs in enumerate(observations, start=1):
             prob = probabilities[iteration - 1]
             model.create_sub(obs, prob, iteration)
+        end_create_ef = time.time()
+        elapsed_create_ef = end_create_ef - start_create_ef
+        print(
+            f"Time taken to build the extensive form: {elapsed_create_ef:.6f} seconds."
+        )
         up_bound = None
 
     if upper_bound and replication > 0:
@@ -99,7 +106,11 @@ def extensive_form(
 
     # Solve the extensive form
     model.prob.master_model.setParam("OutputFlag", 0)
+    start_optimize_ef = time.time()
     model.prob.master_model.optimize()
+    end_optimize_ef = time.time()
+    elapsed_optimize_ef = end_optimize_ef - start_optimize_ef
+    print(f"Time taken to solve the extensive form: {elapsed_optimize_ef:.6f} seconds.")
 
     obj_value = model.prob.master_model.ObjVal
 
@@ -141,10 +152,10 @@ def main():
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
-    sampling = False
+    sampling = True
 
     # Set parameters for the case sampling = True
-    iterations = 200
+    iterations = 10000
     replications = 1
     upper_bound = False
 

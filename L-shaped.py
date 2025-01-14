@@ -87,6 +87,8 @@ def add_feasibility_cut(model, Gamma, gamma, iteration):
 
 
 def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
+    # Step 0: Initialization
+    start_step_0 = time.time()
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
     start_create_master = time.time()
@@ -97,7 +99,7 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
         f"Time taken to create the master model: {elapsed_create_master:.6f} seconds."
     )
 
-    # Optionally save file as 'master.lp' in output directory
+    # Optionally save file as 'master_0.lp' in output directory
     os.makedirs(output_dir, exist_ok=True)
     master_model = os.path.join(output_dir, "master_0.lp")
     model.prob.master_model.write(master_model)
@@ -146,15 +148,26 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
         h_vec = np.array([const.RHS for const in model.prob.LSsub_model.getConstrs()])
         h_vec_list.append(h_vec)
 
-    # Start of the algorithm
+    end_step_0 = time.time()
+    elapsed_step_0 = end_step_0 - start_step_0
+    print(
+        f"Time taken to execute step 0 of the L-shaped method: {elapsed_step_0:.6f} seconds."
+    )
+
+    total_time_step_1 = 0
+    total_time_step_2 = 0
+    total_matrix_mult = 0
+
+    # Start of the while-loop
     while not convergence_criterion:
         print("nu=", nu)
         Beta = 0
         beta = 0
         up_bound_sum = 0
-        skip_up_bound_computation = False
+        skip_to_step_2 = False
 
         # Step 1: Solve subproblems and generate cut
+        start_step_1 = time.time()
         for i, obs in enumerate(observations):
             model.change_LSsub(obs, incmb, i, LSsub_constr, LSsub_constr_obs_indices)
             model.prob.LSsub_model.setParam("OutputFlag", 0)
@@ -175,19 +188,25 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
 
                 h_vec = h_vec_list[i]
 
+                start_matrix_mult = time.time()
                 Gamma = np.dot(sigma.T, T_mat)
                 gamma = np.dot(sigma.T, h_vec)
+                end_matrix_mult = time.time()
+                elapsed_matrix_mult = end_matrix_mult - start_matrix_mult
+                total_matrix_mult += elapsed_matrix_mult
 
                 add_feasibility_cut(model, Gamma, gamma, nu)
 
-                # Break and skip to step 3
-                skip_up_bound_computation = True
+                # Break and skip to step
+                skip_to_step_2 = True
+
+                end_step_1 = time.time()
+                elapsed_step_1 = end_step_1 - start_step_1
+                total_time_step_1 += elapsed_step_1
                 break
 
-            # Step 2: Compute an optimality cut
+            # Compute an optimality cut
             obj_value = model.prob.LSsub_model.objVal
-            # LSsub_model = os.path.join(output_dir, f"LSsub_{i}.lp")
-            # model.prob.LSsub_model.write(LSsub_model)
 
             dual_mult = np.array(
                 model.prob.LSsub_model.getAttr(
@@ -197,14 +216,20 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
             h_vec = h_vec_list[i]
 
             prob = probabilities[i]
+
+            start_matrix_mult = time.time()
             Beta_sum = np.dot(dual_mult.T, T_mat)
             beta_sum = np.dot(dual_mult.T, h_vec)
+            end_matrix_mult = time.time()
+
+            elapsed_matrix_mult = end_matrix_mult - start_matrix_mult
+            total_matrix_mult += elapsed_matrix_mult
 
             Beta += prob * Beta_sum
             beta += prob * beta_sum
             up_bound_sum += prob * obj_value
 
-        if not skip_up_bound_computation:
+        if not skip_to_step_2:
             new_up_bound = np.dot(np.array(cost_coeff), np.array(incmb)) + up_bound_sum
 
             if new_up_bound <= up_bound:
@@ -214,10 +239,15 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
             eta_var = model.prob.master_vars[-1]
             add_optimality_cut(model, Beta, beta, eta_var, nu)
 
-        # Step 3: solve master program
-        start_step_3 = time.time()
+            end_step_1 = time.time()
+            elapsed_step_1 = end_step_1 - start_step_1
+            total_time_step_1 += elapsed_step_1
 
+        # Step 2: Solve master program.
+        start_step_2 = time.time()
         model.prob.master_model.optimize()
+        end_solve_master = time.time()
+
         master_model = os.path.join(output_dir, f"master_{nu}.lp")
         model.prob.master_model.write(master_model)
 
@@ -228,12 +258,22 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
         if new_lo_bound >= lo_bound:
             lo_bound = new_lo_bound
 
-        end_step_3 = time.time()
-        elapsed_step_3 = end_step_3 - start_step_3
-        # print(f"Time taken to execute step 3 of the L-shaped method: {elapsed_step_3:.6f} seconds.")
+        end_step_2 = time.time()
+        elapsed_step_2 = end_step_2 - start_step_2
+        total_time_step_2 += elapsed_step_2
 
-        # Step 4: termination
+        # Step 3: Termination
         if abs(up_bound - lo_bound) < abs(epsilon * up_bound):
+            print(
+                f"Total time taken for matrix multiplications: {total_matrix_mult:.6f} seconds."
+            )
+            print(
+                f"Total time taken to execute step 1 of the L-shaped method: {total_time_step_1:.6f} seconds."
+            )
+            print(
+                f"Total time taken to execute step 2 of the L-shaped method: {total_time_step_2:.6f} seconds."
+            )
+
             convergence_criterion = True
             print("Solution of first-stage variables:")
             for var, value in zip(model.prob.master_vars, x_opt):
@@ -247,14 +287,14 @@ def l_shaped(model, sampling, iterations, T_mat, instance, method="L-shaped"):
 def main():
     start_main = time.time()
 
-    instance = "lands2"
+    instance = "lands3"
     input_dir = "/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Input/"
     output_dir = f"/Users/Jolijn/Documents/Berlin/Thesis/Code/readSMPS-Py/readSMPS/Output/{instance}"
 
-    sampling = False
+    sampling = True
 
     # Set parameters for the case sampling = True
-    iterations = 200
+    iterations = 20000
 
     d = decompose(f"{instance}", input_dir)
     d.find_stage_idx()
